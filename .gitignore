@@ -1,0 +1,8 @@
+.omc/
+.DS_Store
+__pycache__/
+.venv/
+target/
+dbt_packages/
+logs/
+.user.yml
