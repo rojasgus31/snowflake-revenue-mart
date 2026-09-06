@@ -9,6 +9,15 @@
 -- non-null -- so a row whose revenue cannot be computed is absent from both
 -- and cannot mask a leak. If this test fails, revenue is disappearing
 -- somewhere in the pipeline and no number in the mart can be trusted.
+--
+-- The "recognised" bucket below is summed from mart_revenue_performance,
+-- which full-outer-joins fct_forecast. It is therefore correct ONLY while
+-- fct_forecast is unique per (product_id, region, forecast_month). If
+-- duplicate forecast keys were ever introduced, actual_revenue would fan out
+-- across the duplicates and this reconciliation could overcount recognised
+-- revenue while still appearing to balance. That uniqueness is enforced by
+-- the dbt_utils.unique_combination_of_columns test on fct_forecast in
+-- _marts__models.yml -- that test must not be removed.
 
 with source_total as (
 

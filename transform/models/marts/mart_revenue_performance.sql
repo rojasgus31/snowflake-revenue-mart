@@ -57,10 +57,14 @@ measured as (
         forecast_revenue,
         forecast_quantity,
 
+        -- For a NO_FORECAST row the variance equals the full actual revenue --
+        -- nothing was planned, so all of it is unplanned.
         cast(actual_revenue - coalesce(forecast_revenue, 0) as decimal(18, 2)) as revenue_variance,
 
         -- NULLIF guards the zero-forecast case, which is common: a product sold
-        -- into a region nobody planned for divides by zero without it.
+        -- into a region nobody planned for divides by zero without it. The
+        -- percentage is deliberately NULL in that case -- a percentage against
+        -- a zero base is meaningless rather than infinite.
         cast(
             (actual_revenue - coalesce(forecast_revenue, 0))
             / nullif(forecast_revenue, 0)
@@ -81,11 +85,17 @@ measured as (
         late_count,
         cancelled_count,
 
+        -- Denominator is deliberately On Time + Late only -- Not Delivered,
+        -- Cancelled and Unknown orders are excluded. This measures punctuality
+        -- among orders that actually arrived, not fulfilment overall.
         case
             when (on_time_count + late_count) > 0
                 then cast(on_time_count * 1.0 / (on_time_count + late_count) as decimal(18, 4))
         end as on_time_delivery_rate,
 
+        -- A month whose orders were all cancelled reads BELOW_PLAN here, same
+        -- as an ordinary shortfall -- actual_revenue is 0 either way. cancelled_count
+        -- is the column that distinguishes that case from a genuine miss.
         case
             when forecast_revenue is null then 'NO_FORECAST'
             when order_count = 0          then 'NO_ACTUALS'

@@ -1,6 +1,10 @@
 -- What was excluded, why, and what it cost. Publishing the price of every
 -- exclusion is what keeps quarantining honest: a silent rejects table is
 -- indistinguishable from deleting the rows.
+--
+-- pct_of_source_rows is scoped to the Oracle orders source only, since that
+-- is currently the only source producing rejects. The denominator would need
+-- revisiting if another source ever contributed rows to this table.
 
 with rejects as (
 
