@@ -1,0 +1,6 @@
+region_name,is_forecastable
+LATAM,true
+North America,true
+EMEA,true
+APAC,true
+UNMAPPED,false

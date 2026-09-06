@@ -1,0 +1,29 @@
+version: 2
+
+sources:
+  - name: oracle
+    description: >
+      Order transactions extracted from Oracle Fusion Cloud. Landed as-is:
+      all columns VARCHAR, no deduplication, no coercion.
+    schema: raw
+    tables:
+      - name: raw_oracle_orders
+        description: One row per order line, as delivered by the extract.
+
+  - name: salesforce
+    description: Customer accounts from Salesforce. Sole source of region.
+    schema: raw
+    tables:
+      - name: raw_salesforce_accounts
+
+  - name: adaptive
+    description: Revenue plan from Adaptive Planning, at product x region x month.
+    schema: raw
+    tables:
+      - name: raw_adaptive_forecast
+
+  - name: erp
+    description: Product master with standard cost. Sole source of cost.
+    schema: raw
+    tables:
+      - name: raw_erp_products
