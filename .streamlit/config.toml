@@ -3,3 +3,22 @@ headless = true
 
 [browser]
 gatherUsageStats = false
+
+[theme]
+base = "dark"
+backgroundColor = "#100D0A"
+secondaryBackgroundColor = "#1B1815"
+textColor = "#EBE7E4"
+borderColor = "#312D2A"
+dataframeBorderColor = "#312D2A"
+dataframeHeaderBackgroundColor = "#1B1815"
+# Neutral on purpose: this drives tab underlines, chip fills, slider tracks
+# and focus rings. None of those are semantic states, so none of them get
+# the variance or data-quality hues -- that is the single biggest visual
+# change in this redesign.
+primaryColor = "#8A8581"
+linkColor = "#8A8581"
+font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap, -apple-system, sans-serif"
+headingFont = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap, -apple-system, sans-serif"
+codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap, ui-monospace, monospace"
+baseFontSize = 16

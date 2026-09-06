@@ -1,0 +1,114 @@
+/* Revenue Performance dashboard theme.
+
+Colour is reserved for two axes: variance (amber below plan, teal above
+plan) and data quality (violet, quarantine only). Every other element in
+this file stays neutral -- tabs, chips, sliders and structural chrome carry
+no hue. Streamlit's own theme tokens (.streamlit/config.toml) set the
+neutral surface/text/border/font values that this stylesheet builds on;
+this file only adds the layout pieces Streamlit's theming API cannot reach
+(the lede sentence, the weighted figure cards, the reconciliation callouts).
+*/
+
+:root {
+    --surface-raised: #1B1815;
+    --border: #312D2A;
+    --muted: #8A8581;
+    --text: #EBE7E4;
+    --amber: #DC9242;
+    --teal: #50BFBE;
+    --violet: #A886CF;
+}
+
+.lede {
+    font-size: 21px;
+    line-height: 1.55;
+    font-weight: 500;
+    color: var(--text);
+    margin: 0 0 6px 0;
+    max-width: 62em;
+}
+
+.grain-note {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 0 28px 0;
+}
+
+.figure-card {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px 22px;
+    height: 100%;
+}
+
+.figure-label {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+}
+
+.figure-value {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+.figure-value--primary { font-size: 37px; }
+.figure-value--secondary { font-size: 28px; }
+
+.figure-sub {
+    font-size: 14px;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.5;
+}
+
+.figure-sub .num {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+}
+
+.state-amber { color: var(--amber); }
+.state-teal { color: var(--teal); }
+.state-violet { color: var(--violet); }
+
+.callout-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 18px 0 4px 0;
+}
+
+.callout {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-raised);
+    padding: 12px 18px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text);
+}
+
+.callout .num {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.section-caption {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: -6px;
+    margin-bottom: 10px;
+}
+
+/* Tabular numerals throughout every dataframe, without recolouring it. */
+[data-testid="stDataFrame"] * {
+    font-variant-numeric: tabular-nums;
+}
