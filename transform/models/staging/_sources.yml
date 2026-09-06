@@ -1,5 +1,22 @@
 version: 2
 
+# Freshness thresholds below are a Snowflake-only capability: dbt's source
+# freshness check needs `loaded_at_field` plus a warehouse it can query for
+# max(_loaded_at), and the DuckDB adapter does not implement
+# `calculate_freshness` at all. `dbt build`/`dbt test` on the default DuckDB
+# target never evaluates freshness, so this config is inert there and does not
+# break the 94/94 local build. Run it for real with:
+#   uv run dbt source freshness --project-dir transform --profiles-dir transform --target snowflake
+# (not run in this session -- the trial's session token may be expired).
+#
+# This is one daily batch (see ingest/load_raw.py, invoked once per day per
+# snowflake/README.md). Thresholds are picked to catch a missed run without
+# firing on a normal one:
+#   warn_after: 30 hours  -- a run that's a few hours late (weekend, retry) warns
+#     without paging anyone.
+#   error_after: 48 hours -- two missed daily runs in a row is unambiguously
+#     broken, not just late.
+
 sources:
   - name: oracle
     description: >
@@ -9,21 +26,37 @@ sources:
     tables:
       - name: raw_oracle_orders
         description: One row per order line, as delivered by the extract.
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 30, period: hour}
+          error_after: {count: 48, period: hour}
 
   - name: salesforce
     description: Customer accounts from Salesforce. Sole source of region.
     schema: raw
     tables:
       - name: raw_salesforce_accounts
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 30, period: hour}
+          error_after: {count: 48, period: hour}
 
   - name: adaptive
     description: Revenue plan from Adaptive Planning, at product x region x month.
     schema: raw
     tables:
       - name: raw_adaptive_forecast
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 30, period: hour}
+          error_after: {count: 48, period: hour}
 
   - name: erp
     description: Product master with standard cost. Sole source of cost.
     schema: raw
     tables:
       - name: raw_erp_products
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: {count: 30, period: hour}
+          error_after: {count: 48, period: hour}

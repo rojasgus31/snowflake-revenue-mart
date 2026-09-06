@@ -6,6 +6,7 @@
 - dbt documentation site (lineage graph, model docs, test results) — [GitHub Pages](https://rojasgus31.github.io/snowflake-revenue-mart/)
 - Streamlit dashboard — pending deployment
 - Design document — [`docs/design/revenue-mart-design.md`](docs/design/revenue-mart-design.md)
+- Observability — [`snowflake/OBSERVABILITY.md`](snowflake/OBSERVABILITY.md)
 
 A Snowflake data pipeline over four source systems — Oracle Fusion orders,
 Salesforce accounts, Adaptive Planning forecast, and an ERP product master —
@@ -118,6 +119,16 @@ What has actually been proven, and where:
   [`docs/evidence/`](docs/evidence/); see that directory's README for what
   each file proves and how to reproduce it (`make snowflake-proof`).
   Snowsight screenshots have not yet been captured.
+
+## Observability
+
+dbt source freshness is wired to the `_loaded_at` timestamp every RAW table
+carries (`transform/models/staging/_sources.yml`), a small runnable query
+pack over Snowflake's own telemetry covers cost, row counts, and recent query
+health (`snowflake/observability.sql`), and the Streamlit dashboard already
+surfaces the latest build's results from `run_results.json`. See
+[`snowflake/OBSERVABILITY.md`](snowflake/OBSERVABILITY.md) for what's
+implemented, what's deliberately not built, and why.
 
 ## Stack
 
