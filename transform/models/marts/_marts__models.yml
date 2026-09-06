@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: Monthly spine for calendar 2025. Empty months appear as zeros, not gaps.
+    columns:
+      - name: date_month
+        data_tests: [unique, not_null]
+
+  - name: dim_region
+    columns:
+      - name: region_name
+        data_tests: [unique, not_null]
+
+  - name: dim_customer
+    description: >
+      Type 1. Includes synthetic rows for customers present in orders but
+      absent from Salesforce, preserving referential integrity without
+      discarding revenue.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: region
+        data_tests:
+          - relationships:
+              to: ref('dim_region')
+              field: region_name
+
+  - name: dim_product
+    description: Type 1, with synthetic rows for products absent from the master.
+    columns:
+      - name: product_id
+        data_tests: [unique, not_null]
