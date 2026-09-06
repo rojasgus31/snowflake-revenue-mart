@@ -112,10 +112,12 @@ def _style_plot(fig: go.Figure) -> go.Figure:
     fig.update_xaxes(
         gridcolor=COLOR_BORDER, zerolinecolor=COLOR_BORDER, linecolor=COLOR_BORDER,
         color=COLOR_MUTED, tickfont=dict(family=FONT_MONO, color=COLOR_MUTED),
+        title_font=dict(family=FONT_SANS, color=COLOR_MUTED, size=13),
     )
     fig.update_yaxes(
         gridcolor=COLOR_BORDER, zerolinecolor=COLOR_BORDER, linecolor=COLOR_BORDER,
         color=COLOR_MUTED, tickfont=dict(family=FONT_MONO, color=COLOR_MUTED),
+        title_font=dict(family=FONT_SANS, color=COLOR_MUTED, size=13),
     )
     return fig
 
@@ -360,14 +362,19 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
         )
         fig.update_layout(
             height=min(90 + 60 * len(by_region), 480),
-            xaxis_title="Variance ($, zero-anchored)",
+            xaxis_title="Revenue Variance (USD, zero-anchored)",
             yaxis_title="Region",
             showlegend=False,
         )
         fig.add_vline(x=0, line_color=COLOR_BORDER, line_width=1)
         fig = _style_plot(fig)
-        fig.update_layout(margin=dict(t=40, l=90, r=30, b=60))
+        fig.update_layout(margin=dict(t=40, l=90, r=40, b=60))
         st.plotly_chart(fig, width="stretch")
+        st.caption(
+            "Every region sits below plan; bar length shows how far, in dollars, "
+            "not in percent, since percent alone would hide that most rows had "
+            "no orders at all."
+        )
 
 
 def tab_revenue_variance(data: dict[str, pd.DataFrame]):
@@ -462,16 +469,25 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
     fig_monthly.add_trace(go.Bar(
         x=monthly["revenue_month"], y=monthly["actual_revenue"],
         name="Actual", marker_color=COLOR_TEXT,
+        text=[CURRENCY_FORMAT.format(v) for v in monthly["actual_revenue"]],
+        textposition="outside",
     ))
     fig_monthly.add_trace(go.Bar(
         x=monthly["revenue_month"], y=monthly["forecast_revenue"],
         name="Forecast", marker_color=COLOR_MUTED,
         marker_pattern_shape="/",
+        text=[CURRENCY_FORMAT.format(v) for v in monthly["forecast_revenue"]],
+        textposition="outside",
     ))
     fig_monthly.update_layout(
-        barmode="group", yaxis_title="Revenue", xaxis_title="Month", height=420,
+        barmode="group", yaxis_title="Revenue (USD)", xaxis_title="Month",
+        height=460, legend_title_text="Series",
     )
     st.plotly_chart(_style_plot(fig_monthly), width="stretch")
+    st.caption(
+        "Forecast dwarfs actual in every month; the gap is the same "
+        "structural shortfall the lede describes, not a swing month to month."
+    )
 
     st.markdown("---")
     left, right = st.columns(2)
@@ -514,13 +530,32 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         )
         flags = mart["variance_flag"].value_counts().reset_index()
         flags.columns = ["flag", "count"]
-        fig2 = px.pie(
-            flags, names="flag", values="count", hole=0.4,
-            color="flag", color_discrete_map=FLAG_COLORS,
+        flags["flag"] = pd.Categorical(flags["flag"], categories=FLAG_ORDER, ordered=True)
+        flags = flags.sort_values("flag")
+        fig2 = go.Figure(
+            go.Bar(
+                x=flags["count"],
+                y=flags["flag"].astype(str),
+                orientation="h",
+                marker_color=[FLAG_COLORS[f] for f in flags["flag"]],
+                text=[f"{int(c):,}" for c in flags["count"]],
+                textposition="outside",
+            )
         )
-        fig2.update_traces(textinfo="label+percent", textfont=dict(family=FONT_SANS))
-        fig2.update_layout(height=380)
-        st.plotly_chart(_style_plot(fig2), width="stretch")
+        fig2.update_layout(
+            height=260,
+            xaxis_title="Product-Region-Months (count)",
+            yaxis_title="Variance Flag",
+            showlegend=False,
+        )
+        fig2.update_yaxes(autorange="reversed")
+        fig2 = _style_plot(fig2)
+        fig2.update_layout(margin=dict(t=40, l=150, r=50, b=60))
+        st.plotly_chart(fig2, width="stretch")
+        st.caption(
+            "NO_ACTUALS dwarfs every other flag: most of the grid never had "
+            "an order to compare against plan."
+        )
 
     st.markdown("---")
     st.subheader("Variance by Product Family")
@@ -534,9 +569,19 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         color="revenue_variance",
         color_continuous_scale=VARIANCE_COLORSCALE,
         color_continuous_midpoint=0,
+        text=by_family["revenue_variance"].apply(CURRENCY_FORMAT.format),
     )
-    fig3.update_layout(yaxis_title="Variance ($)", xaxis_title="Product Family", height=420)
+    fig3.update_traces(textposition="outside")
+    fig3.update_layout(
+        yaxis_title="Revenue Variance (USD)", xaxis_title="Product Family",
+        height=460, coloraxis_colorbar_title="Variance (USD)",
+        margin=dict(t=40, l=60, r=30, b=80),
+    )
     st.plotly_chart(_style_plot(fig3), width="stretch")
+    st.caption(
+        "Every product family sits below plan; colour and bar direction "
+        "agree, so the reader never has to reconcile the two."
+    )
 
     st.markdown("---")
     left2, right2 = st.columns(2)
@@ -615,13 +660,30 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
         st.subheader("Delivery Status Distribution")
         status_counts = orders["delivery_status"].value_counts().reset_index()
         status_counts.columns = ["status", "count"]
-        fig = px.pie(
-            status_counts, names="status", values="count", hole=0.4,
-            color="status", color_discrete_map=status_shades,
+        status_counts = status_counts.sort_values("count")
+        fig = go.Figure(
+            go.Bar(
+                x=status_counts["count"],
+                y=status_counts["status"],
+                orientation="h",
+                marker_color=[status_shades[s] for s in status_counts["status"]],
+                text=[f"{int(c):,}" for c in status_counts["count"]],
+                textposition="outside",
+            )
         )
-        fig.update_traces(textinfo="label+percent", textfont=dict(family=FONT_SANS))
-        fig.update_layout(height=380)
-        st.plotly_chart(_style_plot(fig), width="stretch")
+        fig.update_layout(
+            height=320,
+            xaxis_title="Orders (count)",
+            yaxis_title="Delivery Status",
+            showlegend=False,
+        )
+        fig = _style_plot(fig)
+        fig.update_layout(margin=dict(t=40, l=120, r=50, b=60))
+        st.plotly_chart(fig, width="stretch")
+        st.caption(
+            "Late is the largest single status, ahead of On Time; only a "
+            "third of shipped orders arrived on schedule."
+        )
 
     with right:
         st.subheader("On-Time Rate by Region")
@@ -639,10 +701,14 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
             )
             fig2.update_traces(marker_color=COLOR_TEXT, textposition="outside")
             fig2.update_layout(
-                yaxis_title="On-Time Rate", yaxis_tickformat=".0%",
+                yaxis_title="On-Time Rate (%)", yaxis_tickformat=".0%",
                 xaxis_title="Region", height=420,
             )
             st.plotly_chart(_style_plot(fig2), width="stretch")
+            st.caption(
+                "Every region falls short of an even on-time split; ranking "
+                "them shows which is furthest behind."
+            )
 
     st.markdown("---")
     st.subheader("Late Orders Detail")
@@ -704,12 +770,30 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
         .agg(actual_revenue=("actual_revenue", "sum"))
         .sort_values("actual_revenue", ascending=False)
     )
-    fig = px.treemap(by_family, path=["product_family"], values="actual_revenue")
-    fig.update_traces(marker_colors=[COLOR_NEUTRAL_4] * len(by_family), textfont=dict(color=COLOR_TEXT))
-    fig.update_layout(height=340)
+    by_family_sorted = by_family.sort_values("actual_revenue")
+    fig = go.Figure(
+        go.Bar(
+            x=by_family_sorted["actual_revenue"],
+            y=by_family_sorted["product_family"],
+            orientation="h",
+            marker_color=COLOR_NEUTRAL_2,
+            text=[CURRENCY_FORMAT.format(v) for v in by_family_sorted["actual_revenue"]],
+            textposition="outside",
+        )
+    )
+    fig.update_layout(
+        height=min(90 + 50 * len(by_family_sorted), 400),
+        xaxis_title="Actual Revenue (USD)",
+        yaxis_title="Product Family",
+        showlegend=False,
+    )
     fig = _style_plot(fig)
-    fig.update_layout(margin=dict(t=40, l=10, r=10, b=10))
+    fig.update_layout(margin=dict(t=40, l=140, r=60, b=60))
     st.plotly_chart(fig, width="stretch")
+    st.caption(
+        "Revenue concentrates in the top one or two families; the rest "
+        "trail well behind."
+    )
 
     st.markdown("---")
     left, right = st.columns(2)
@@ -743,28 +827,39 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
 
         fig2 = px.bar(
             by_product, x="product_name", y="actual_margin",
-            labels={"actual_margin": "Gross Margin ($)"},
-            text=by_product["margin_coverage"].apply(
-                lambda c: f"{c:.0%} coverage" if pd.notna(c) else f"{NULL_MARKER} coverage"
+            labels={"actual_margin": "Gross Margin (USD)"},
+            text=by_product.apply(
+                lambda r: (
+                    f"{CURRENCY_FORMAT.format(r['actual_margin'])} "
+                    f"({r['margin_coverage']:.0%} cov.)"
+                    if pd.notna(r["margin_coverage"])
+                    else f"{CURRENCY_FORMAT.format(r['actual_margin'])} ({NULL_MARKER} cov.)"
+                ),
+                axis=1,
             ),
         )
         fig2.update_traces(marker_color=COLOR_TEXT, textposition="outside")
-        fig2.update_layout(xaxis_title="Product", xaxis_tickangle=-45, height=460)
+        fig2.update_layout(xaxis_title="Product", xaxis_tickangle=-45, height=480)
         fig2 = _style_plot(fig2)
-        fig2.update_layout(margin=dict(t=40, l=60, r=30, b=140))
+        fig2.update_layout(margin=dict(t=60, l=70, r=30, b=150))
         st.plotly_chart(fig2, width="stretch")
+        st.caption(
+            "Coverage below 100 percent means a slice of that bar's margin "
+            "is unknown, not zero; the label says how much of it to trust."
+        )
 
     with right:
         st.subheader("Product Lifecycle Status")
-        lifecycle = products[~products["is_synthetic"]]["lifecycle_status"].value_counts().reset_index()
-        lifecycle.columns = ["status", "count"]
-        fig3 = px.pie(lifecycle, names="status", values="count", hole=0.4)
-        fig3.update_traces(
-            marker=dict(colors=[COLOR_NEUTRAL_1, COLOR_NEUTRAL_3, COLOR_NEUTRAL_4, COLOR_NEUTRAL_5]),
-            textinfo="label+percent", textfont=dict(family=FONT_SANS),
+        # Twelve products across three statuses is too small a set for a
+        # chart to earn its place; a sentence states the same three counts
+        # without asking the reader to decode a legend for so little data.
+        lifecycle = products[~products["is_synthetic"]]["lifecycle_status"].value_counts()
+        lifecycle_parts = [f"{int(n)} {status}" for status, n in lifecycle.items()]
+        st.markdown(
+            f'<p>Of {int(lifecycle.sum())} products: '
+            f'{", ".join(lifecycle_parts)}.</p>',
+            unsafe_allow_html=True,
         )
-        fig3.update_layout(height=380)
-        st.plotly_chart(_style_plot(fig3), width="stretch")
 
         st.subheader("Products at a Glance")
         product_display = products[~products["is_synthetic"]][[
@@ -832,8 +927,18 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
         decreasing={"marker": {"color": COLOR_MUTED}},
         totals={"marker": {"color": COLOR_VIOLET}},
     ))
-    fig.update_layout(title="Revenue Reconciliation Waterfall", showlegend=False, height=400)
+    fig.update_layout(
+        title="Revenue Reconciliation Waterfall",
+        xaxis_title="Bucket",
+        yaxis_title="Revenue (USD)",
+        showlegend=False,
+        height=420,
+    )
     st.plotly_chart(_style_plot(fig), width="stretch")
+    st.caption(
+        "The four buckets sum to the source total exactly; nothing is "
+        "dropped or double-counted between raw orders and the mart."
+    )
 
     st.markdown("---")
     left, right = st.columns(2)
@@ -861,10 +966,15 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
             )
             fig2.update_traces(marker_color=COLOR_VIOLET, textposition="outside")
             fig2.update_layout(
-                showlegend=False, yaxis_title="Rejected Revenue ($)",
-                xaxis_title="DQ Failure Reason", xaxis_tickangle=-20, height=420,
+                showlegend=False, yaxis_title="Rejected Revenue (USD)",
+                xaxis_title="DQ Failure Reason", xaxis_tickangle=-20, height=440,
+                margin=dict(t=40, l=70, r=30, b=110),
             )
             st.plotly_chart(_style_plot(fig2), width="stretch")
+            st.caption(
+                "One failure reason accounts for most of the quarantined "
+                "revenue; the rest are minor by comparison."
+            )
 
     st.markdown("---")
     st.subheader("Rejected Rows Detail")
