@@ -9,8 +9,8 @@ looking foreign. Not an essay: if it is not a rule, it is not here.
 | Token | Hex | Role | When it may be used |
 |---|---|---|---|
 | `--surface` | `#FAF8F6` | Page background | Body background only. |
-| `--surface-raised` | `#F3EFED` | Raised band background | The instrument header, the filter strip. Never a card, never a rounded box. |
-| `--border` | `#DAD7D3` | Hairline rule | Every ruled band separator, chart gridlines, axis lines. Never a heavy border. |
+| `--surface-raised` | `#F3EFED` | Raised surface background | The instrument header and balance bar (full-bleed band), and every panel (`panel(key)`): figures, charts, tables, callouts, the filter strip. |
+| `--border` | `#DAD7D3` | Hairline rule | Every panel border, every `section_rule()` separator, chart gridlines, axis lines. Never a heavy border. |
 | `--text` | `#24211E` | Body / heading text | All primary text. |
 | `--muted` | `#6C6864` | Secondary text | Captions, labels, axis ticks. |
 | `--red` | `#C2181D` | **Data weight.** Below-plan variance, Late delivery. | Only on data that is genuinely below plan or a judged-bad outcome. Never on chrome, never decorative. |
@@ -68,13 +68,34 @@ gaps): never apply the largest available value by default.
 
 ## Layout rules
 
-- **Ruled bands, not cards.** No bordered/filled boxes, no shadows, no
-  border-radius, no nested containers. A region is set off from its
-  neighbour by one `1px solid var(--border)` rule (`.band-rule` /
-  `.band-rule--tight`, drawn by `section_rule()`), never by a box around
-  it. The instrument header and filter strip are the one exception that
-  gets a raised background (`--surface-raised`): still bounded only by a
-  top and bottom rule, never a full border or radius.
+- **Panels, not floating cards.** A panel is a region of one composed
+  surface, not an object floating on a blank page. Every figure, chart,
+  table, callout group and the filter strip is wrapped in
+  `panel(key)` (`st.container(key=f"panel-{key}")`), which is styled by
+  one shared rule, `[class*="st-key-panel-"]` in `app/theme.css`:
+  filled `--surface-raised` background, a 1px `var(--border)` hairline
+  border, a small radius capped at **4px** (never pill-like), and **no
+  drop shadow of any kind**. Internal padding stays snug at
+  `--space-2` (16px), not airy.
+
+  The thing that actually keeps a panel from reading as a floating card
+  is **not the border** -- it is the combination of a **tight gutter**
+  (`--gutter`, 12px, the same gutter `st.columns` already enforces)
+  between adjacent panels, and every panel **sharing the same outer
+  edges** as its neighbours. Panels placed in `st.columns` line up left
+  and right because the column grid already aligns them; panels stacked
+  in sequence line up because they all sit at the same width inside the
+  same block container. The result is one continuous seam running
+  through a row of panels, horizontally and vertically, so the page
+  reads as a composed grid of regions rather than a set of separate
+  objects drifting apart with wide gutters between them. A border alone,
+  with loose gutters and no shared alignment, is exactly the isolated
+  floating-card look this rule replaces.
+
+  The instrument header and the balance bar are the one exception,
+  kept as the full-bleed raised band they already were: bounded only by
+  a top and bottom rule, never a border on all four sides or a radius,
+  since that full-width band is what anchors the top of the page.
 - **Table rows:** compact, `row_height=32` on every `st.dataframe(...)`
   call. Hairline row separators only (Streamlit's own default), no zebra
   striping, no heavy borders.
@@ -83,7 +104,8 @@ gaps): never apply the largest available value by default.
   value.
 - **Gutters:** 12px (`--gutter`) between adjacent columns, enforced on
   every `[data-testid="stHorizontalBlock"]` regardless of the `gap=`
-  argument passed to `st.columns(...)`.
+  argument passed to `st.columns(...)`; the same 12px separates stacked
+  panels vertically, via the panel rule above.
 - **Page padding:** the block container's top/side padding is reduced so
   content occupies the width it has, not a wide empty margin.
 
@@ -91,24 +113,28 @@ gaps): never apply the largest available value by default.
 
 | Component | Function / class | Notes |
 |---|---|---|
-| Instrument header | `render_instrument_header()`, `.st-key-instrument-header` | Persistent above the tabs on every tab: dashboard name, data source + backend, last loaded time, dbt tests passing. Raised surface, top/bottom rule, never a card. |
+| Instrument header | `render_instrument_header()`, `.st-key-instrument-header` | Persistent above the tabs on every tab: dashboard name, data source + backend, last loaded time, dbt tests passing. Full-bleed raised band, top/bottom rule only, never a panel. |
 | Balance bar | `render_balance_bar()`, `.balance-bar` | The signature element. One 10px-tall, full-width, four-segment proportional bar: recognised (teal) + open (muted grey) + cancelled (dimmer grey) + quarantined (violet) = source total. Exact values on hover via the native `title` attribute. Always visible in the header, always sums to the whole. |
-| Figure block | `figure_card()`, `.figure-block` | A label (11px condensed, uppercase), a value (mono, 48px primary / 22px secondary), and a sub-line (13px). No border, no fill. |
-| Chart block | `_style_plot()` | One shared Plotly chrome style: `plotly_white` template, surface-coloured background, muted axis text in Plex Mono, no gridline colour beyond `--border`. |
-| Table | `st.dataframe(..., row_height=32, width="stretch")` | See Layout rules above. |
-| Filter strip | `render_filter_row()`, `.st-key-filter-row` | Three inline filters (region, product family, month range) in a raised band above the tabs. No hue on the chips beyond the chrome accent tint: a filter selection is not a semantic state. |
-| Section rule | `section_rule(weight="section" | "tight")` | The one hairline break between regions of a tab; replaces every bare `st.markdown("---")`. |
+| Panel | `panel(key)`, `[class*="st-key-panel-"]` | The one container for a figure, a chart, a table or a callout group: see Layout rules above. Every call site passes a distinct `key`; the CSS rule is shared, not per-key. |
+| Figure block | `figure_card()`, `.figure-block` | Sits inside a panel: a label (11px condensed, uppercase), a value (mono, 48px primary / 22px secondary), and a sub-line (13px). The figure block itself carries no border or fill of its own; its panel does. |
+| Chart block | `_style_plot()`, wrapped in `panel(...)` | One shared Plotly chrome style: `plotly_white` template, surface-coloured background, muted axis text in Plex Mono, no gridline colour beyond `--border`. |
+| Table | `st.dataframe(..., row_height=32, width="stretch")`, wrapped in `panel(...)` | See Layout rules above. |
+| Filter strip | `render_filter_row()`, `.st-key-panel-filter-strip` | Three inline filters (region, product family, month range), styled as one panel above the tabs. No hue on the chips beyond the chrome accent tint: a filter selection is not a semantic state. |
+| Section rule | `section_rule(weight="section" | "tight")` | The one hairline break between distinct panels or panel rows within a tab; replaces every bare `st.markdown("---")`. |
 
 ## Bans
 
-- No cards: no bordered or filled boxes around content.
+- No isolated floating cards: no panel with a wide gutter or margin that
+  separates it from the composed grid (see Layout rules for what a panel
+  is instead).
 - No shadows.
 - No gradients.
 - No pie or donut charts.
 - No colour on a control that is not conveying data (a filter chip, a
   slider handle, a tab label get the chrome accent tint only, never a
   saturated fill).
-- No glassmorphism, no side-stripe borders, no gradient text.
+- No glassmorphism, no side-stripe borders (a coloured `border-left` or
+  `border-right` thicker than 1px), no gradient text.
 - No hero-metric template (a dashboard is not a marketing tile grid).
 - No neon, no motion or animation, no emoji.
 - No em dashes in copy, and no `--` standing in for one.

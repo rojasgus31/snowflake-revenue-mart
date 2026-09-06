@@ -43,16 +43,21 @@ red's bold, saturated fill:
                   contrast -- a border, not a warning)
 
 -------------------------------------------------------------------------
-LAYOUT, restructured: ruled bands, not floating cards.
+LAYOUT: panels, gridded tight, not floating cards.
 
-Every panel that used to sit as an isolated bordered box on a blank field
-(figure cards, callouts, the filter strip) is now a full-width band on the
-page, separated from its neighbour by a single 1px hairline rule in
---border. No shadows, no rounded containers, no nested boxes: content
-sits directly on the surface. Spacing follows an 8px base scale
-(8/16/24/32/48) applied UNEVENLY -- 8px between things that belong to each
-other (a figure and its sub-line), 32-48px at a real section break -- so
-density reads as a deliberate hierarchy rather than uniform padding.
+Every figure, chart, table, callout group and the filter strip sits in a
+panel (see the PANELS block below): a filled --surface-raised background,
+a 1px hairline border, radius capped at 4px, never a shadow. What keeps a
+row of panels from reading as separate floating objects is not the
+border -- it is a tight (12px) gutter between them and every panel
+sharing the same outer edges as its neighbours, so they tile into one
+composed grid with continuous seams. The instrument header and balance
+bar stay the one full-bleed exception, bounded only by a top/bottom rule,
+since that anchors the top of the page. Spacing elsewhere follows an 8px
+base scale (8/16/24/32/48) applied UNEVENLY -- 8px between things that
+belong to each other (a figure and its sub-line), 32-48px at a real
+section break -- so density reads as a deliberate hierarchy rather than
+uniform padding.
 ------------------------------------------------------------------------- */
 
 :root {
@@ -259,16 +264,17 @@ between a figure and its own sub-line, which stays at 8px. */
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    margin: var(--space-2) 0 var(--space-1) 0;
+    margin: 0;
 }
 
-/* Callouts stay text on the surface, ruled off from what comes after
-rather than boxed -- the same ruled-band language as everything else. */
+/* A callout sits directly on its panel's own surface; the panel's 1px
+border does the containment, so the callout itself carries no border of
+its own (a coloured side-stripe would read as a second, competing accent
+-- see the Bans list). */
 .callout {
     border: none;
-    border-left: 2px solid var(--border);
     background: none;
-    padding: 2px 0 2px var(--space-2);
+    padding: 0;
     font-size: var(--text-xs);
     line-height: 1.55;
     color: var(--text);
@@ -292,53 +298,99 @@ rather than boxed -- the same ruled-band language as everything else. */
     font-variant-numeric: tabular-nums;
 }
 
-/* Filter row multiselect chips must size to their own label, never clip
-mid-word. */
-[data-baseweb="tag"] {
+/* -------------------------------------------------------------------
+PANELS -- containment, done properly (see DESIGN.md's Layout rules for
+the full definition). A panel is a region of one composed surface, not an
+object floating on a blank page: filled background one step off the page
+surface, a 1px hairline border, a small (<=4px) radius, never a shadow.
+What actually stops a panel reading as an isolated floating card is NOT
+the border -- it is TIGHT gutters between panels (--gutter, 12px, the
+same gutter st.columns already uses) and every panel sharing the same
+outer edges, so a row of panels tiles into one grid with continuous
+seams instead of drifting apart with wide gaps between separate objects.
+Internal padding stays snug (--space-2, 16px) rather than airy.
+
+Every call site wraps its content in `st.container(key="panel-<name>")`;
+Streamlit turns that key into a `st-key-panel-<name>` class on the
+container's own div, so this one wildcard rule (`[class*=...]`) styles
+every panel identically without a separate CSS block per call site. */
+[class*="st-key-panel-"] {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: var(--space-2);
+    margin-bottom: var(--gutter);
+}
+
+/* Panels placed inside st.columns already share edges via the column
+grid; the gutter between those columns is --gutter (12px), tightened
+elsewhere in this file. A panel is the last thing in its column, so it
+does not also need the vertical margin-bottom above pushing it away from
+the column's own edge. */
+[data-testid="stHorizontalBlock"] [class*="st-key-panel-"] {
+    margin-bottom: 0;
+}
+
+/* Filter row multiselect chips: this Streamlit build renders each
+selected value as a <span data-tag> inside
+[data-testid="stMultiSelectTagsContainer"] (verified from the live DOM),
+not the [data-baseweb="tag"] older Streamlit versions use -- that
+selector matches nothing here, which is why the chip kept the raw
+Streamlit fill despite an earlier override targeting it. The
+`st-emotion-cache-*` class sitting on the same element is regenerated
+per build and is deliberately not used as a selector.
+
+Streamlit's own rule for this element is a single generated class,
+specificity (0,1,0), with no `!important`
+(`.st-emotion-cache-1u354jq { background-color: rgb(164, 89, 81); color:
+rgb(255, 255, 255); ... }`, confirmed via the live stylesheet). The
+selectors below combine the stable `data-testid` container with the
+stable `data-tag`/`title` attributes, giving specificity (0,2,1) or
+higher, so they win on specificity alone -- `!important` is not needed
+and is not used here. Verified after the fact by re-reading the
+element's computed style. */
+[data-testid="stMultiSelectTagsContainer"] span[data-tag] {
+    background-color: var(--chip-tint);
+    border: 1px solid var(--chip-border);
+    color: var(--chip-text);
     height: auto;
     max-width: 100%;
     white-space: normal;
 }
 
-[data-baseweb="tag"] span {
+[data-testid="stMultiSelectTagsContainer"] span[data-tag]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+/* The label span (title attribute carries the value, e.g. title="North
+America") must wrap instead of Streamlit's default nowrap + ellipsis,
+which is what clipped a long value like "Imaging Accessories". */
+[data-testid="stMultiSelectTagsContainer"] span[data-tag] span[title] {
+    color: var(--chip-text);
     white-space: normal;
     overflow: visible;
     text-overflow: unset;
     word-break: break-word;
 }
 
-/* Streamlit's own multiselect chip fills solid with primaryColor by
-default -- once primaryColor is the accent red, that reads as a warning
-badge on every filter selection. A chip is a selected filter, not a
-semantic state, so it gets the chrome weight only. */
-[data-baseweb="tag"] {
-    background-color: var(--chip-tint) !important;
-    border: 1px solid var(--chip-border) !important;
-    color: var(--chip-text) !important;
+[data-testid="stMultiSelectTagsContainer"] span[data-tag] button {
+    color: var(--chip-text);
 }
 
-[data-baseweb="tag"] span {
-    color: var(--chip-text) !important;
+[data-testid="stMultiSelectTagsContainer"] span[data-tag] button svg {
+    fill: currentColor;
 }
 
-[data-baseweb="tag"] svg {
-    fill: var(--chip-text) !important;
-}
-
-/* --- Filter strip: a ruled band, not a card ----------------------------
-Raised surface top and bottom rules only, no border-radius, no box: the
-same visual language as the instrument header below, scaled down. */
-.st-key-filter-row {
-    background: var(--surface-raised);
-    border: none;
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    border-radius: 0;
-    padding: var(--space-2) var(--space-2) var(--space-1) var(--space-2);
+/* --- Filter strip: a panel, same as any other panel on the page -------
+Picks up background/border/radius/padding from the shared
+`[class*="st-key-panel-"]` rule above; only the label typography below is
+specific to this one panel. */
+.st-key-panel-filter-strip {
     margin-bottom: var(--space-4);
 }
 
-.st-key-filter-row label p {
+.st-key-panel-filter-strip label p {
     font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif;
     font-weight: 600 !important;
     font-size: var(--text-2xs) !important;
@@ -347,7 +399,7 @@ same visual language as the instrument header below, scaled down. */
     letter-spacing: 0.05em;
 }
 
-.st-key-filter-row [data-testid="stCaptionContainer"] {
+.st-key-panel-filter-strip [data-testid="stCaptionContainer"] {
     margin-top: 2px;
 }
 
