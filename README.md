@@ -56,7 +56,7 @@ have.
 
 Twelve defects were found by profiling. Each has a documented handling decision
 with a rationale in
-[the design spec](docs/superpowers/specs/2026-09-04-snowflake-revenue-mart-design.md#3-data-quality-defects-and-handling-decisions).
+[the design spec](docs/design/revenue-mart-design.md#3-data-quality-defects-and-handling-decisions).
 
 The governing principle: **no row is ever deleted.** Rows that cannot be trusted
 are routed to a rejects table with a `dq_failure_reason` and reported in
