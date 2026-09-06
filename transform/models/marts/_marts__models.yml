@@ -102,3 +102,13 @@ models:
         data_tests:
           - accepted_values:
               values: ["NO_FORECAST", "NO_ACTUALS", "AT_OR_ABOVE_PLAN", "BELOW_PLAN"]
+
+  - name: dq_reject_summary
+    description: >
+      Row count and dollar value of every exclusion, by reason. Makes the cost
+      of quarantining visible rather than implicit.
+    columns:
+      - name: dq_failure_reason
+        data_tests: [unique, not_null]
+      - name: rejected_row_count
+        data_tests: [not_null]
