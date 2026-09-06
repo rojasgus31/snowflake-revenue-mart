@@ -25,23 +25,66 @@ with your username and run the whole script.
 
 ## 2. Set credentials
 
-`profiles.yml` reads these from the environment, so nothing is ever committed:
+Both `profiles.yml` and the loader read these from the environment, so nothing is
+ever committed:
 
 ```bash
-export SNOWFLAKE_ACCOUNT=abc12345.us-east-1
+export SNOWFLAKE_ACCOUNT=ORGNAME-ACCOUNTNAME
 export SNOWFLAKE_USER=your_user
 export SNOWFLAKE_PASSWORD=your_password
-export SNOWFLAKE_ROLE=TRANSFORMER
-export SNOWFLAKE_WAREHOUSE=WH_TRANSFORM_XS
 export SNOWFLAKE_DATABASE=REVENUE_ANALYTICS
 ```
 
-## 3. Load and build
+Get `SNOWFLAKE_ACCOUNT` from Snowsight: the account menu at the bottom left,
+hover your account, then "Copy account identifier". The legacy
+`<locator>.<region>` form also works.
+
+## 3. Load, then build — with DIFFERENT roles
+
+The loader and dbt run as different roles ON PURPOSE, which is the whole point
+of the three-role split in `01_bootstrap.sql`. LOADER can create tables in RAW
+and can touch nothing else; TRANSFORMER can read RAW and owns everything
+downstream. Each role is granted usage on only its own warehouse, so the role
+and the warehouse must be changed together.
+
+Load RAW as LOADER:
 
 ```bash
+export SNOWFLAKE_ROLE=LOADER
+export SNOWFLAKE_WAREHOUSE=WH_LOAD_XS
 uv run python ingest/load_raw.py --target snowflake
+```
+
+Then transform as TRANSFORMER:
+
+```bash
+export SNOWFLAKE_ROLE=TRANSFORMER
+export SNOWFLAKE_WAREHOUSE=WH_TRANSFORM_XS
 uv run dbt build --project-dir transform --profiles-dir transform --target snowflake
 ```
+
+Running the loader as TRANSFORMER fails: that role has `select` on RAW but not
+`create table`, and no usage on `WH_LOAD_XS`.
+
+## 4. Verify
+
+```sql
+use role transformer;
+select count(*) from revenue_analytics.raw.raw_oracle_orders;   -- 128
+select count(*) from revenue_analytics.analytics.mart_revenue_performance;  -- 289
+```
+
+`dbt build` should report the same 94 results it does on DuckDB.
+
+## Authentication note
+
+Snowflake has been enforcing MFA on password sign-in for newer accounts, which
+breaks password-only programmatic access. If the connection is rejected despite
+correct credentials, switch to key-pair authentication: generate an RSA pair,
+`alter user <you> set rsa_public_key='...'`, and swap `password` for
+`private_key_path` in the `snowflake` output of `transform/profiles.yml`. The
+loader reads the same environment variables and would need the equivalent
+change in `_snowflake_credentials_from_env`.
 
 ## Cost note
 
