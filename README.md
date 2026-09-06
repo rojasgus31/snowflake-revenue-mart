@@ -1,5 +1,12 @@
 # Revenue Performance Mart
 
+[![CI](https://github.com/rojasgus31/snowflake-revenue-mart/actions/workflows/ci.yml/badge.svg)](https://github.com/rojasgus31/snowflake-revenue-mart/actions/workflows/ci.yml)
+
+**Live artifacts:**
+- dbt documentation site (lineage graph, model docs, test results) — [GitHub Pages](https://rojasgus31.github.io/snowflake-revenue-mart/)
+- Streamlit dashboard — pending deployment
+- Design document — [`docs/design/revenue-mart-design.md`](docs/design/revenue-mart-design.md)
+
 A Snowflake data pipeline over four source systems — Oracle Fusion orders,
 Salesforce accounts, Adaptive Planning forecast, and an ERP product master —
 producing `analytics.mart_revenue_performance`.
@@ -90,6 +97,24 @@ Two decisions worth calling out:
 - **`PROD999` has no standard cost**, so its margin is NULL rather than zero.
   Zero would report a 100% margin — a plausible-looking lie. Revenue is
   knowable; margin is not.
+
+## Verified evidence
+
+What has actually been proven, and where:
+
+- **94 dbt results and 7 pytest tests pass in CI on every push to `main`**
+  (`.github/workflows/ci.yml`) — not just on this machine, on a clean runner
+  with no local state.
+- **The reconciliation figures above are exact**, not estimated: source
+  revenue of $9,448,724.11 splits into $6,168,239.01 recognised,
+  $3,006,773.46 open/cancelled, and $273,711.64 rejected, and `dbt build`
+  fails if that stops balancing to the cent.
+- **The Snowflake path is code-complete but not yet evidenced.** See
+  [`docs/evidence/`](docs/evidence/) for what a live Snowflake run leaves
+  behind (`dbt`'s own run artifact, the build log, and Snowsight
+  screenshots) and how to produce it (`make snowflake-proof`). As of this
+  commit that directory is still empty: validation has been performed on
+  DuckDB only.
 
 ## Stack
 
