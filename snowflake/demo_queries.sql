@@ -110,9 +110,39 @@ from (
 );
 
 
--- 8. The role split -------------------------------------------------------
+-- 8. The role split, and why it only holds with secondary roles off -------
 -- LOADER writes RAW and nothing else. TRANSFORMER reads RAW and owns
--- everything downstream. REPORTER reads only the published marts.
--- Running the loader as TRANSFORMER fails, which is the design working.
+-- everything downstream. REPORTER reads only the published marts -- but
+-- granting that role to a human user is not enough to enforce it, because
+-- Snowflake keeps every other role that user holds active as a secondary
+-- role by default. This block switches to REPORTER and shows the boundary
+-- failing to hold, then makes it hold. See
+-- docs/evidence/reporter_role_verification.md for the full write-up.
 
-show grants to role loader;
+use role reporter;
+
+-- Whatever else this session's user holds keeps riding along here. On the
+-- account this was verified against, that showed ACCOUNTADMIN, TRANSFORMER,
+-- ORGADMIN and LOADER all still active -- none of them REPORTER's own grant.
+select current_role(), current_secondary_roles();
+
+-- This should be refused by REPORTER's own grants (SELECT on ANALYTICS
+-- only), and yet it succeeds: the secondary roles above are doing the work,
+-- not REPORTER.
+select count(*) from revenue_analytics.raw.raw_oracle_orders;
+
+-- Drop every role but the primary one for the rest of this session. This is
+-- the step a human user has to remember and a BI service account should
+-- never need, because it should be created with
+-- default_secondary_roles = () in the first place (see the service-account
+-- section at the end of snowflake/01_bootstrap.sql).
+use secondary roles none;
+
+-- Now REPORTER's own grants are the only thing left, and the mart is
+-- exactly what they allow.
+select count(*) from revenue_analytics.analytics.mart_revenue_performance;
+
+-- This is expected to fail with "Schema 'REVENUE_ANALYTICS.RAW' does not
+-- exist or not authorized." That error is the demonstration working, not a
+-- problem to fix -- it is REPORTER's real boundary, finally being enforced.
+select count(*) from revenue_analytics.raw.raw_oracle_orders;
