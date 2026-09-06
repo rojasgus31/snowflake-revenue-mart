@@ -125,21 +125,17 @@ clears 4.5:1 for both, unlike the dark theme, which needed a lighter
     font-variant-numeric: tabular-nums;
 }
 
-/* Sidebar filter chips (multiselect) must size to their own label, never
-clip mid-word. A wider sidebar gives long values like "Unknown" room, and
-letting the chip wrap and grow means even a value that still does not fit
-one line is read in full rather than cut off. */
-[data-testid="stSidebar"] {
-    min-width: 340px;
-}
-
-[data-testid="stSidebar"] [data-baseweb="tag"] {
+/* Filter row multiselect chips must size to their own label, never clip
+mid-word. The filter row sits inline above the tabs now, not in a sidebar,
+so this is scoped to any multiselect tag on the page rather than to a
+sidebar container that no longer exists. */
+[data-baseweb="tag"] {
     height: auto;
     max-width: 100%;
     white-space: normal;
 }
 
-[data-testid="stSidebar"] [data-baseweb="tag"] span {
+[data-baseweb="tag"] span {
     white-space: normal;
     overflow: visible;
     text-overflow: unset;

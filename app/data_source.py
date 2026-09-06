@@ -17,8 +17,8 @@ three backends at runtime, in order:
 Object names differ by backend -- `analytics.mart_revenue_performance` in
 DuckDB, `<database>.analytics.mart_revenue_performance` in Snowflake -- so
 every caller in this codebase writes queries against the unqualified
-`analytics.*` names, and `query()` is the one place that prefixes them with
-the active backend's database qualifier before the SQL runs.
+`analytics.*` or `raw.*` names, and `query()` is the one place that prefixes
+them with the active backend's database qualifier before the SQL runs.
 """
 
 from __future__ import annotations
@@ -207,7 +207,10 @@ def query(sql: str) -> pd.DataFrame:
     reach the caller as a traceback.
     """
     backend = _resolve_backend()
-    qualified_sql = sql.replace("analytics.", f"{_database_qualifier()}analytics.")
+    qualifier = _database_qualifier()
+    qualified_sql = sql.replace("analytics.", f"{qualifier}analytics.").replace(
+        "raw.", f"{qualifier}raw."
+    )
 
     try:
         if backend["kind"] == "duckdb":

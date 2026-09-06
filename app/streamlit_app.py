@@ -2,7 +2,8 @@
 
 Five-tab layout exposing the full star schema: executive summary, revenue
 variance deep-dive, delivery performance (order-grain), product & margin
-analysis, and data quality reconciliation. All tabs share sidebar filters.
+analysis, and data quality reconciliation. All tabs share one inline
+filter row.
 
 Reads through data_source.query(), which resolves to Snowpark, a live
 Snowflake connector, or the committed DuckDB file; no code changes needed
@@ -10,16 +11,20 @@ per backend.
 
 Colour system: one diverging axis for variance (red below plan, teal
 above plan) and one separate hue for data quality (violet, quarantine
-only), all darkened to clear 4.5:1 on the warm off-white surface.
-Structural chrome (tabs, filter chips, sliders, focus rings) carries no
-hue at all; that neutrality comes from .streamlit/config.toml's theme
-tokens. app/theme.css adds the handful of layout pieces (the lede
-sentence, the weighted figure cards, the reconciliation callouts) that
-Streamlit's theming API cannot reach on its own.
+only), all darkened to clear 4.5:1 on the warm off-white surface. A bar
+fill is never the text colour -- text is for text -- so purely structural
+categories (delivery states with no judgement attached, like "Not
+Delivered" or "Cancelled") use a grey ramp instead. Structural chrome
+(tabs, filter chips, sliders, focus rings) carries no hue at all; that
+neutrality comes from .streamlit/config.toml's theme tokens. app/theme.css
+adds the handful of layout pieces (the lede sentence, the weighted figure
+cards, the reconciliation callouts) that Streamlit's theming API cannot
+reach on its own.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -53,18 +58,13 @@ COLOR_RED = "#C2181D"
 COLOR_TEAL = "#007475"
 COLOR_VIOLET = "#754D9E"
 
-# A five-step neutral fill ramp, darkest to faintest, for chart series that
-# are neither variance nor data-quality states (delivery status, lifecycle
-# status). These are structural, not semantic, so they stay in the same
-# warm-neutral hue family as the surface rather than borrowing red/teal/
-# violet; ordered so the most common/important slice is darkest and least
-# important recedes toward the surface, same direction the surface itself
-# now points (light, not dark).
-COLOR_NEUTRAL_1 = COLOR_TEXT
-COLOR_NEUTRAL_2 = "#4A4744"
-COLOR_NEUTRAL_3 = COLOR_MUTED
-COLOR_NEUTRAL_4 = "#BBB6B3"
-COLOR_NEUTRAL_5 = COLOR_BORDER
+# Two grey steps for genuinely neutral fills -- categories that carry no
+# judgement and are not variance, not data quality, just a structural state
+# (an order not yet delivered, a cancelled order excluded from revenue).
+# Never the text colour: #8A8580 is the darkest either one goes, clearly
+# lighter than COLOR_TEXT/COLOR_MUTED, so a bar never reads as near-black.
+COLOR_GREY_MID = "#8A8580"    # pending / in-progress, no judgement
+COLOR_GREY_LIGHT = "#BBB6B3"  # excluded / structurally absent, no judgement
 
 FONT_SANS = "'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif"
 FONT_MONO = "'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace"
@@ -144,6 +144,24 @@ def inject_theme():
     st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
 
 
+RUN_RESULTS_PATH = Path(__file__).resolve().parent.parent / "transform" / "target" / "run_results.json"
+
+
+def _load_dbt_run_results() -> dict | None:
+    """The dbt build's own run_results.json, if one exists.
+
+    A fresh clone has never run `make build`, so the file may simply be
+    absent -- that is not an error, it is the expected state before a first
+    build, and the caller shows a short message instead of a traceback.
+    """
+    if not RUN_RESULTS_PATH.exists():
+        return None
+    try:
+        return json.loads(RUN_RESULTS_PATH.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def load_data() -> dict[str, pd.DataFrame]:
     mart = query("select * from analytics.mart_revenue_performance")
     orders = query("select * from analytics.fct_orders")
@@ -205,26 +223,37 @@ def apply_filters(
     return filtered
 
 
-def render_sidebar(data: dict[str, pd.DataFrame]):
-    st.sidebar.title("Filters")
-    st.sidebar.caption(f"Source: {backend_name()}")
+def render_filter_row(data: dict[str, pd.DataFrame]):
+    """The three filters, inline above the tabs rather than in a sidebar.
 
-    all_regions = sorted(data["mart"]["region"].unique())
-    regions = st.sidebar.multiselect("Region", all_regions, default=all_regions)
+    A plain horizontal row, not an expander or a modal: the filters apply to
+    every tab exactly as before, they are just no longer hidden in a drawer.
+    """
+    col_region, col_family, col_months, col_source = st.columns([2, 2, 3, 2])
 
-    all_families = sorted(data["products"]["product_family"].unique())
-    families = st.sidebar.multiselect("Product Family", all_families, default=all_families)
+    with col_region:
+        all_regions = sorted(data["mart"]["region"].unique())
+        regions = st.multiselect("Region", all_regions, default=all_regions)
 
-    all_months = sorted(pd.to_datetime(data["mart"]["revenue_month"]).unique())
-    if len(all_months) >= 2:
-        month_range = st.sidebar.select_slider(
-            "Month Range",
-            options=all_months,
-            value=(all_months[0], all_months[-1]),
-            format_func=lambda x: pd.Timestamp(x).strftime("%b %Y"),
-        )
-    else:
-        month_range = (all_months[0], all_months[0]) if all_months else None
+    with col_family:
+        all_families = sorted(data["products"]["product_family"].unique())
+        families = st.multiselect("Product Family", all_families, default=all_families)
+
+    with col_months:
+        all_months = sorted(pd.to_datetime(data["mart"]["revenue_month"]).unique())
+        if len(all_months) >= 2:
+            month_range = st.select_slider(
+                "Month Range",
+                options=all_months,
+                value=(all_months[0], all_months[-1]),
+                format_func=lambda x: pd.Timestamp(x).strftime("%b %Y"),
+            )
+        else:
+            month_range = (all_months[0], all_months[0]) if all_months else None
+
+    with col_source:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        st.caption(f"Source: {backend_name()}")
 
     return regions, families, month_range
 
@@ -246,7 +275,7 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
 
     # --- The lede: the actual story, in words, computed from the whole
     # dataset so it never contradicts the reconciliation facts below no
-    # matter how the sidebar is set. -84% variance alone reads as a revenue
+    # matter how the filter row is set. -84% variance alone reads as a revenue
     # collapse; naming the unfulfilled-demand-planning story prevents that.
     mart_raw = raw["mart"]
     raw_actual = mart_raw["actual_revenue"].sum()
@@ -309,7 +338,7 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
         )
 
     # Reconciliation always covers the whole source dataset, ignoring the
-    # sidebar; a partially-filtered reconciliation would not prove
+    # filter row; a partially-filtered reconciliation would not prove
     # anything, the same rule tab_data_quality already follows.
     dq_raw = raw["dq"]
     orders_raw = raw["orders"]
@@ -485,7 +514,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
     fig_monthly = go.Figure()
     fig_monthly.add_trace(go.Bar(
         x=monthly["revenue_month"], y=monthly["actual_revenue"],
-        name="Actual", marker_color=COLOR_TEXT,
+        name="Actual", marker_color=COLOR_GREY_MID,
         text=[CURRENCY_FORMAT.format(v) for v in monthly["actual_revenue"]],
         textposition="outside",
     ))
@@ -660,18 +689,21 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
         "product x region x month aggregate."
     )
 
-    left, right = st.columns(2)
-
-    # Delivery status is operational, not variance and not data quality --
-    # it stays neutral, and each slice carries its own label so hue is
-    # never the only thing distinguishing one status from another.
+    # Delivery status carries real meaning, not a neutral operational label:
+    # On Time/Late sit on the same good/bad axis as revenue variance, Not
+    # Delivered and Cancelled are structurally absent outcomes with no
+    # judgement attached (so they take a grey, never the text colour), and
+    # Unknown exists only because of a data defect (D8: one row is delivered
+    # before it was ordered), so it takes the data-quality hue.
     status_shades = {
-        "On Time": COLOR_NEUTRAL_1,
-        "Late": COLOR_NEUTRAL_2,
-        "Not Delivered": COLOR_NEUTRAL_3,
-        "Cancelled": COLOR_NEUTRAL_4,
-        "Unknown": COLOR_NEUTRAL_5,
+        "On Time": COLOR_TEAL,
+        "Late": COLOR_RED,
+        "Not Delivered": COLOR_GREY_MID,
+        "Cancelled": COLOR_GREY_LIGHT,
+        "Unknown": COLOR_VIOLET,
     }
+
+    left, right = st.columns(2)
 
     with left:
         st.subheader("Delivery Status Distribution")
@@ -689,17 +721,21 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
             )
         )
         fig.update_layout(
+            title="Delivery Status, All Orders",
             height=320,
             xaxis_title="Orders (count)",
             yaxis_title="Delivery Status",
             showlegend=False,
         )
         fig = _style_plot(fig)
-        fig.update_layout(margin=dict(t=40, l=120, r=50, b=60))
+        fig.update_layout(margin=dict(t=60, l=120, r=50, b=60))
         st.plotly_chart(fig, width="stretch")
         st.caption(
             "Late is the largest single status, ahead of On Time; only a "
-            "third of shipped orders arrived on schedule."
+            "third of shipped orders arrived on schedule. Not Delivered and "
+            "Cancelled carry no dates to judge, and Unknown is a single "
+            "data-defect row explained below, so none of the three are "
+            "scored against the plan."
         )
 
     with right:
@@ -716,16 +752,105 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
                 by_region, x="region", y="on_time_rate",
                 text=by_region["on_time_rate"].apply(lambda x: f"{x:.0%}"),
             )
-            fig2.update_traces(marker_color=COLOR_TEXT, textposition="outside")
+            fig2.update_traces(marker_color=COLOR_TEAL, textposition="outside")
             fig2.update_layout(
-                yaxis_title="On-Time Rate (%)", yaxis_tickformat=".0%",
+                title="On-Time Rate by Region",
+                yaxis_title="On-Time Rate (% of On Time + Late)",
+                yaxis_tickformat=".0%",
                 xaxis_title="Region", height=420,
             )
             st.plotly_chart(_style_plot(fig2), width="stretch")
             st.caption(
                 "Every region falls short of an even on-time split; ranking "
-                "them shows which is furthest behind."
+                "them shows which is furthest behind. Denominator is On Time "
+                "plus Late only, the same convention the mart uses."
             )
+
+    st.markdown("---")
+    st.subheader("Promised vs Actual: Delivery Gap in Days")
+    st.caption(
+        "A status count says an order was late; it does not say by how much. "
+        "The gap below, in days, is derived the same way for every On Time or "
+        "Late order: actual delivery date minus promised delivery date. "
+        "Positive means the order arrived after it was promised."
+    )
+
+    dated = shipped[shipped["delivery_status"].isin(["On Time", "Late"])].copy()
+    if not dated.empty:
+        dated["actual_delivery_date"] = pd.to_datetime(dated["actual_delivery_date"])
+        dated["promised_delivery_date"] = pd.to_datetime(dated["promised_delivery_date"])
+        dated["delivery_gap_days"] = (
+            dated["actual_delivery_date"] - dated["promised_delivery_date"]
+        ).dt.days
+
+        gap_left, gap_right = st.columns(2)
+        with gap_left:
+            avg_gap = dated["delivery_gap_days"].mean()
+            worst_gap = dated["delivery_gap_days"].max()
+            st.metric("Average Gap, On Time + Late Orders", f"{avg_gap:+.1f} days")
+            st.metric("Worst Single Gap", f"{int(worst_gap):+d} days")
+
+        with gap_right:
+            by_region_gap = (
+                dated.groupby("region", as_index=False)["delivery_gap_days"]
+                .mean()
+                .sort_values("delivery_gap_days")
+            )
+            gap_colors = [
+                COLOR_RED if v > 0 else COLOR_TEAL
+                for v in by_region_gap["delivery_gap_days"]
+            ]
+            fig3 = go.Figure(
+                go.Bar(
+                    x=by_region_gap["delivery_gap_days"],
+                    y=by_region_gap["region"],
+                    orientation="h",
+                    marker_color=gap_colors,
+                    text=[f"{v:+.1f}" for v in by_region_gap["delivery_gap_days"]],
+                    textposition="outside",
+                )
+            )
+            fig3.add_vline(x=0, line_color=COLOR_BORDER, line_width=1)
+            fig3.update_layout(
+                title="Average Delivery Gap by Region",
+                height=280,
+                xaxis_title="Average Gap (days, zero-anchored)",
+                yaxis_title="Region",
+                showlegend=False,
+            )
+            fig3 = _style_plot(fig3)
+            fig3.update_layout(margin=dict(t=60, l=90, r=40, b=60))
+            st.plotly_chart(fig3, width="stretch")
+        st.caption(
+            "Red bars run late on average, teal bars run on time or early on "
+            "average; the axis is the same shortfall-versus-plan convention "
+            "used for revenue, applied here to a promise instead of a plan."
+        )
+
+    st.markdown("---")
+    st.subheader("The Rows a Status Count Alone Would Hide")
+    n_cancelled = int((orders["delivery_status"] == "Cancelled").sum())
+    n_unknown = int((orders["delivery_status"] == "Unknown").sum())
+    st.markdown('<div class="callout-row">', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="callout">'
+        f'<span class="num">{n_cancelled}</span> orders are Cancelled. Every '
+        f'one of them carries a delivery date in the source system, which '
+        f'contradicts a cancelled order; order status wins and the date is '
+        f'ignored, so these rows are excluded from on-time scoring rather '
+        f'than counted as a delivery outcome.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<div class="callout">'
+        f'<span class="num">{n_unknown}</span> order is Unknown: its actual '
+        f'delivery date falls before its order date, which is not physically '
+        f'possible. The dates are untrustworthy, so the delivery status '
+        f'degrades to Unknown rather than being guessed at; the revenue is '
+        f'not in question and stays recognised.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("Late Orders Detail")
@@ -746,10 +871,20 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
             "order_id", "customer_id", "product_id", "region",
             "order_date", "promised_delivery_date", "actual_delivery_date",
             "days_late", "gross_revenue",
-        ]].sort_values("days_late", ascending=False)
+        ]].rename(columns={
+            "order_id": "Order",
+            "customer_id": "Customer",
+            "product_id": "Product",
+            "region": "Region",
+            "order_date": "Order Date",
+            "promised_delivery_date": "Promised",
+            "actual_delivery_date": "Actual",
+            "days_late": "Days Late",
+            "gross_revenue": "Gross Revenue",
+        }).sort_values("Days Late", ascending=False)
 
         st.dataframe(
-            late_display.style.format({"gross_revenue": "${:,.2f}"}, na_rep=NULL_MARKER),
+            late_display.style.format({"Gross Revenue": "${:,.2f}"}, na_rep=NULL_MARKER),
             width="stretch",
             hide_index=True,
             height=400,
@@ -767,6 +902,7 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
     total_orders = len(orders)
     margin_coverage = known_cost_orders / total_orders if total_orders > 0 else None
     total_margin = mart["actual_margin"].sum()
+    uncovered_orders = orders[~orders["has_standard_cost"]]
 
     m1, m2, m3 = st.columns(3)
     m1.metric("Orders", f"{int(total_orders):,}")
@@ -775,10 +911,36 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
         "Margin Coverage",
         PCT_FORMAT.format(margin_coverage) if margin_coverage is not None else NULL_MARKER,
     )
-    st.caption(
-        "Margin coverage below 100% means some orders lacked a standard "
-        "cost, so those orders' margin is unknown, never rendered as zero."
-    )
+
+    # Margin coverage is the interesting column here, not a footnote: a
+    # complete margin figure and a partial one are different claims, so the
+    # gap gets a callout naming exactly which order(s) it is, the same way
+    # the executive summary names the UNMAPPED row rather than hiding it in
+    # a caption.
+    st.markdown('<div class="callout-row">', unsafe_allow_html=True)
+    if not uncovered_orders.empty:
+        order_list = ", ".join(uncovered_orders["order_id"].astype(str))
+        product_list = ", ".join(sorted(uncovered_orders["product_id"].unique()))
+        st.markdown(
+            f'<div class="callout">'
+            f'<span class="state-violet">&#9670;</span> '
+            f'<span class="num">{len(uncovered_orders)}</span> of '
+            f'<span class="num">{total_orders}</span> orders '
+            f'(<span class="num">{order_list}</span>, product '
+            f'<span class="num">{product_list}</span>) has no standard cost. '
+            f'Its margin is unknown, not zero, so the gross margin total '
+            f'above is a complete figure for '
+            f'<span class="num">{PCT_FORMAT.format(margin_coverage)}</span> '
+            f'of orders and silent on the rest.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="callout">Every order has a standard cost on file; '
+            'the margin total is complete.</div>',
+            unsafe_allow_html=True,
+        )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("Revenue by Product Family")
@@ -793,19 +955,20 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
             x=by_family_sorted["actual_revenue"],
             y=by_family_sorted["product_family"],
             orientation="h",
-            marker_color=COLOR_NEUTRAL_2,
+            marker_color=COLOR_TEAL,
             text=[CURRENCY_FORMAT.format(v) for v in by_family_sorted["actual_revenue"]],
             textposition="outside",
         )
     )
     fig.update_layout(
+        title="Revenue by Product Family",
         height=min(90 + 50 * len(by_family_sorted), 400),
         xaxis_title="Actual Revenue (USD)",
         yaxis_title="Product Family",
         showlegend=False,
     )
     fig = _style_plot(fig)
-    fig.update_layout(margin=dict(t=40, l=140, r=60, b=60))
+    fig.update_layout(margin=dict(t=60, l=140, r=60, b=60))
     st.plotly_chart(fig, width="stretch")
     st.caption(
         "Revenue concentrates in the top one or two families; the rest "
@@ -818,9 +981,10 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
     with left:
         st.subheader("Margin by Product")
         st.caption(
-            "Bars are neutral: margin coverage is not a variance or "
-            "data-quality state, so it is not colour-encoded here. See the "
-            "coverage figure above for the unknown share."
+            "Teal marks a product whose margin is built from a fully known "
+            "cost; violet marks one where at least one order had no "
+            "standard cost, so part of that bar's margin is unknown rather "
+            "than zero. The label states the coverage directly."
         )
         by_product = (
             mart.groupby("product_id", as_index=False)
@@ -842,21 +1006,34 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
         by_product["product_name"] = by_product["product_id"].map(product_names).fillna(by_product["product_id"])
         by_product = by_product.sort_values("actual_margin", ascending=False)
 
-        fig2 = px.bar(
-            by_product, x="product_name", y="actual_margin",
-            labels={"actual_margin": "Gross Margin (USD)"},
-            text=by_product.apply(
-                lambda r: (
-                    f"{CURRENCY_FORMAT.format(r['actual_margin'])} "
-                    f"({r['margin_coverage']:.0%} cov.)"
-                    if pd.notna(r["margin_coverage"])
-                    else f"{CURRENCY_FORMAT.format(r['actual_margin'])} ({NULL_MARKER} cov.)"
+        bar_colors = [
+            COLOR_TEAL if pd.notna(c) and c >= 1 else COLOR_VIOLET
+            for c in by_product["margin_coverage"]
+        ]
+
+        fig2 = go.Figure(
+            go.Bar(
+                x=by_product["product_name"],
+                y=by_product["actual_margin"],
+                marker_color=bar_colors,
+                text=by_product.apply(
+                    lambda r: (
+                        f"{CURRENCY_FORMAT.format(r['actual_margin'])} "
+                        f"({r['margin_coverage']:.0%} cov.)"
+                        if pd.notna(r["margin_coverage"])
+                        else f"{CURRENCY_FORMAT.format(r['actual_margin'])} ({NULL_MARKER} cov.)"
+                    ),
+                    axis=1,
                 ),
-                axis=1,
-            ),
+                textposition="outside",
+            )
         )
-        fig2.update_traces(marker_color=COLOR_TEXT, textposition="outside")
-        fig2.update_layout(xaxis_title="Product", xaxis_tickangle=-45, height=480)
+        fig2.update_layout(
+            title="Gross Margin by Product",
+            yaxis_title="Gross Margin (USD)",
+            xaxis_title="Product", xaxis_tickangle=-45, height=480,
+            showlegend=False,
+        )
         fig2 = _style_plot(fig2)
         fig2.update_layout(margin=dict(t=60, l=70, r=30, b=150))
         st.plotly_chart(fig2, width="stretch")
@@ -898,7 +1075,7 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
     st.subheader("Reconciliation Proof")
     st.caption(
         "Every source dollar lands in exactly one bucket. If this stops balancing, dbt build fails. "
-        "This reconciliation always covers the full dataset; it ignores the sidebar filters, since "
+        "This reconciliation always covers the full dataset; it ignores the filter row, since "
         "a partial reconciliation would not prove anything."
     )
 
@@ -927,25 +1104,27 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
 
     st.metric("Source Total (sum of above)", CURRENCY_FORMAT_PRECISE.format(source_total))
 
-    fig = go.Figure(go.Waterfall(
-        x=["Recognized", "Open", "Cancelled", "Rejected", "Source Total"],
-        y=[recognized, open_rev, cancelled_rev, rejected_rev, 0],
-        measure=["relative", "relative", "relative", "relative", "total"],
-        textposition="outside",
-        text=[
-            CURRENCY_FORMAT.format(recognized),
-            CURRENCY_FORMAT.format(open_rev),
-            CURRENCY_FORMAT.format(cancelled_rev),
-            CURRENCY_FORMAT.format(rejected_rev),
-            CURRENCY_FORMAT_PRECISE.format(source_total),
-        ],
-        connector={"line": {"color": COLOR_BORDER}},
-        increasing={"marker": {"color": COLOR_TEXT}},
-        decreasing={"marker": {"color": COLOR_MUTED}},
-        totals={"marker": {"color": COLOR_VIOLET}},
-    ))
+    # One bar per bucket, coloured by what the bucket means rather than by
+    # whether the waterfall step reads as an increase: recognised revenue is
+    # the good outcome (teal), open pipeline and cancelled orders are
+    # structurally neutral (grey, no judgement), and rejected is the
+    # data-quality bucket (violet). The source total is stated as the
+    # metric above rather than repeated as a fifth bar, since a total is not
+    # itself a bucket.
+    recon_labels = ["Recognized", "Open Pipeline", "Cancelled", "Rejected (DQ)"]
+    recon_values = [recognized, open_rev, cancelled_rev, rejected_rev]
+    recon_colors = [COLOR_TEAL, COLOR_GREY_MID, COLOR_GREY_LIGHT, COLOR_VIOLET]
+    fig = go.Figure(
+        go.Bar(
+            x=recon_labels,
+            y=recon_values,
+            marker_color=recon_colors,
+            text=[CURRENCY_FORMAT.format(v) for v in recon_values],
+            textposition="outside",
+        )
+    )
     fig.update_layout(
-        title="Revenue Reconciliation Waterfall",
+        title="Revenue Reconciliation by Bucket",
         xaxis_title="Bucket",
         yaxis_title="Revenue (USD)",
         showlegend=False,
@@ -953,8 +1132,9 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
     )
     st.plotly_chart(_style_plot(fig), width="stretch")
     st.caption(
-        "The four buckets sum to the source total exactly; nothing is "
-        "dropped or double-counted between raw orders and the mart."
+        f"The four buckets sum to the source total of "
+        f"{CURRENCY_FORMAT_PRECISE.format(source_total)} exactly; nothing "
+        "is dropped or double-counted between raw orders and the mart."
     )
 
     st.markdown("---")
@@ -962,9 +1142,19 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
 
     with left:
         st.subheader("Reject Summary")
+        st.caption(
+            "Six rows across four failure reasons, quarantined before the "
+            "mart is built rather than silently dropped or coerced."
+        )
+        dq_display = dq.rename(columns={
+            "dq_failure_reason": "Failure Reason",
+            "rejected_row_count": "Rows Rejected",
+            "rejected_revenue": "Rejected Revenue",
+            "pct_of_source_rows": "% of Source Rows",
+        })
         st.dataframe(
-            dq.style.format(
-                {"rejected_revenue": "${:,.2f}", "pct_of_source_rows": "{:.2%}"},
+            dq_display.style.format(
+                {"Rejected Revenue": "${:,.2f}", "% of Source Rows": "{:.2%}"},
                 na_rep=NULL_MARKER,
             ),
             width="stretch",
@@ -973,19 +1163,28 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
 
     with right:
         st.subheader("Rejected Revenue by Reason")
-        st.caption("Violet throughout: this chart is entirely data-quality scope.")
+        st.caption(
+            "Violet throughout: this chart is entirely data-quality scope. "
+            "One reason has no revenue figure because the row is missing "
+            "the unit price needed to compute one."
+        )
         dq_valid = dq[dq["rejected_revenue"].notna()]
         if not dq_valid.empty:
             fig2 = px.bar(
                 dq_valid,
                 x="dq_failure_reason", y="rejected_revenue",
+                labels={
+                    "dq_failure_reason": "DQ Failure Reason",
+                    "rejected_revenue": "Rejected Revenue (USD)",
+                },
                 text=dq_valid["rejected_revenue"].apply(lambda x: f"${x:,.0f}"),
             )
             fig2.update_traces(marker_color=COLOR_VIOLET, textposition="outside")
             fig2.update_layout(
-                showlegend=False, yaxis_title="Rejected Revenue (USD)",
-                xaxis_title="DQ Failure Reason", xaxis_tickangle=-20, height=440,
-                margin=dict(t=40, l=70, r=30, b=110),
+                title="Rejected Revenue by Reason",
+                showlegend=False,
+                xaxis_tickangle=-20, height=440,
+                margin=dict(t=60, l=70, r=30, b=110),
             )
             st.plotly_chart(_style_plot(fig2), width="stretch")
             st.caption(
@@ -995,15 +1194,116 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
 
     st.markdown("---")
     st.subheader("Rejected Rows Detail")
-    st.caption("Full payload of every rejected row, with the reason it was excluded.")
+    st.caption(
+        f"Full payload of every one of the {len(rejects)} rejected rows, "
+        "with the reason each was excluded."
+    )
+    rejects_display = rejects.rename(columns={
+        "order_id": "Order",
+        "customer_id": "Customer",
+        "product_id": "Product",
+        "quantity": "Quantity",
+        "unit_price": "Unit Price",
+        "gross_revenue": "Gross Revenue",
+        "order_status": "Order Status",
+        "dq_failure_reason": "Failure Reason",
+    })
     st.dataframe(
-        rejects.style.format(
-            {"gross_revenue": "${:,.2f}", "unit_price": "${:,.2f}"},
+        rejects_display.style.format(
+            {"Gross Revenue": "${:,.2f}", "Unit Price": "${:,.2f}"},
             na_rep=NULL_MARKER,
         ),
         width="stretch",
         hide_index=True,
     )
+
+    st.markdown("---")
+    st.subheader("Pipeline Observability")
+    st.caption(
+        "When the data was last loaded, when the transformation pipeline "
+        "last ran, and whether its tests passed, read from the same "
+        "artifacts the pipeline already writes, not a separate monitoring "
+        "system."
+    )
+
+    obs_left, obs_right = st.columns(2)
+
+    with obs_left:
+        st.markdown("**Data Freshness (raw layer)**")
+        try:
+            freshness = query(
+                "select max(_loaded_at) as last_loaded_at, "
+                "arg_max(_batch_id, _loaded_at) as latest_batch_id, "
+                "count(distinct _batch_id) as batch_count from ("
+                "select _loaded_at, _batch_id from raw.raw_oracle_orders "
+                "union all "
+                "select _loaded_at, _batch_id from raw.raw_erp_products "
+                "union all "
+                "select _loaded_at, _batch_id from raw.raw_adaptive_forecast "
+                "union all "
+                "select _loaded_at, _batch_id from raw.raw_salesforce_accounts"
+                ")"
+            )
+        except DataSourceError as error:
+            st.info(f"Freshness unavailable: {error}")
+        else:
+            if freshness.empty or pd.isna(freshness.loc[0, "last_loaded_at"]):
+                st.info("No load timestamps found in the raw layer yet.")
+            else:
+                row = freshness.iloc[0]
+                st.metric(
+                    "Last Loaded",
+                    pd.Timestamp(row["last_loaded_at"]).strftime("%Y-%m-%d %H:%M %Z").strip(),
+                )
+                st.caption(
+                    f"Batch {row['latest_batch_id']} &middot; "
+                    f"{int(row['batch_count'])} distinct batch(es) on file."
+                )
+
+    with obs_right:
+        st.markdown("**Last dbt Build**")
+        run_results = _load_dbt_run_results()
+        if run_results is None:
+            st.info(
+                "No transform/target/run_results.json found. Run "
+                "`make build` to produce one."
+            )
+        else:
+            results = run_results.get("results", [])
+            model_results = [r for r in results if r["unique_id"].startswith("model.")]
+            test_results = [r for r in results if r["unique_id"].startswith("test.")]
+            models_ok = sum(1 for r in model_results if r["status"] == "success")
+            tests_passed = sum(1 for r in test_results if r["status"] == "pass")
+            tests_failed = len(test_results) - tests_passed
+            generated_at = run_results.get("metadata", {}).get("generated_at", NULL_MARKER)
+            elapsed = run_results.get("elapsed_time")
+
+            st.metric("Pipeline Last Ran", str(generated_at))
+            bm1, bm2, bm3 = st.columns(3)
+            bm1.metric("Models Built", f"{models_ok}/{len(model_results)}")
+            bm2.metric("Tests Passed", f"{tests_passed}/{len(test_results)}")
+            bm3.metric(
+                "Total Run Time",
+                f"{elapsed:.1f}s" if elapsed is not None else NULL_MARKER,
+            )
+            if tests_failed:
+                st.warning(f"{tests_failed} test(s) failed on the last run.")
+
+            slowest = sorted(model_results, key=lambda r: -r["execution_time"])[:5]
+            if slowest:
+                slowest_df = pd.DataFrame([
+                    {
+                        "Model": r["unique_id"].split(".")[-1],
+                        "Execution Time (s)": r["execution_time"],
+                    }
+                    for r in slowest
+                ])
+                st.markdown("Slowest models:")
+                st.dataframe(
+                    slowest_df.style.format({"Execution Time (s)": "{:.2f}"}),
+                    width="stretch",
+                    hide_index=True,
+                )
 
 
 def main():
@@ -1016,7 +1316,7 @@ def main():
         )
 
         data = load_data()
-        regions, families, months = render_sidebar(data)
+        regions, families, months = render_filter_row(data)
         filtered = apply_filters(data, regions, families, months)
 
         tabs = st.tabs([
@@ -1024,7 +1324,7 @@ def main():
             "Revenue Variance",
             "Delivery Performance",
             "Product & Margin",
-            "Data Quality",
+            "Data Quality & Observability",
         ])
 
         with tabs[0]:
@@ -1037,7 +1337,7 @@ def main():
             tab_product_margin(filtered)
         with tabs[4]:
             # Unfiltered `data`, not `filtered`: the reconciliation proof must
-            # cover the whole source dataset regardless of the sidebar's
+            # cover the whole source dataset regardless of the filter row's
             # region/family/month selections, or the totals stop reconciling.
             tab_data_quality(data)
 
