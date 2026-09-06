@@ -8,7 +8,7 @@ Reads through data_source.query(), which resolves to Snowpark, a live
 Snowflake connector, or the committed DuckDB file; no code changes needed
 per backend.
 
-Colour system: one diverging axis for variance (amber below plan, teal
+Colour system: one diverging axis for variance (red below plan, teal
 above plan) and one separate hue for data quality (violet, quarantine
 only). Structural chrome (tabs, filter chips, sliders, focus rings)
 carries no hue at all; that neutrality comes from .streamlit/config.toml's
@@ -36,17 +36,22 @@ PCT_FORMAT = "{:.1%}"
 NULL_MARKER = "unknown"
 
 # Kept in one place, and only here, so every chart, card and table in this
-# app agrees on what each hue means: amber is the below-plan end of the
+# app agrees on what each hue means: red is the below-plan end of the
 # variance axis, teal is the above-plan end, violet is data quality and
 # never variance, and everything else stays neutral. Values match the
 # oklch() colours in app/theme.css and .streamlit/config.toml; see the
-# module docstrings there for the conversion.
+# module docstrings there for the conversion. Two reds exist because a
+# single red cannot satisfy both uses: COLOR_RED_FILL (oklch 0.60 0.20 27)
+# is for large fills such as bar segments, COLOR_RED_TEXT (oklch 0.68 0.18
+# 27) is lighter so text, numerals and 1px strokes clear 4.5:1 contrast
+# against the dark surface.
 COLOR_SURFACE = "#100D0A"
 COLOR_SURFACE_RAISED = "#1B1815"
 COLOR_BORDER = "#312D2A"
 COLOR_TEXT = "#EBE7E4"
 COLOR_MUTED = "#8A8581"
-COLOR_AMBER = "#DC9242"
+COLOR_RED_FILL = "#DE3C37"
+COLOR_RED_TEXT = "#F36358"
 COLOR_TEAL = "#50BFBE"
 COLOR_VIOLET = "#A886CF"
 
@@ -54,19 +59,19 @@ FONT_SANS = "'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif"
 FONT_MONO = "'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace"
 
 # The one diverging colourscale used for every variance visual (heatmap,
-# family bar). Zero-anchored: amber at the low end, a neutral midpoint at
-# zero, teal at the high end; never red, never green.
+# family bar). Zero-anchored: red at the low end, a neutral midpoint at
+# zero, teal at the high end.
 VARIANCE_COLORSCALE = [
-    [0.0, COLOR_AMBER],
+    [0.0, COLOR_RED_FILL],
     [0.5, COLOR_SURFACE_RAISED],
     [1.0, COLOR_TEAL],
 ]
 
 # Variance-flag colours: BELOW_PLAN / AT_OR_ABOVE_PLAN sit on the variance
-# axis (amber / teal). NO_ACTUALS and NO_FORECAST are grain gaps, not a
+# axis (red / teal). NO_ACTUALS and NO_FORECAST are grain gaps, not a
 # variance direction, so they stay neutral rather than borrowing either hue.
 FLAG_COLORS = {
-    "BELOW_PLAN": COLOR_AMBER,
+    "BELOW_PLAN": COLOR_RED_FILL,
     "AT_OR_ABOVE_PLAN": COLOR_TEAL,
     "NO_ACTUALS": COLOR_MUTED,
     "NO_FORECAST": COLOR_BORDER,
@@ -237,7 +242,7 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
     variance = actual - forecast
     variance_pct = variance / forecast if forecast else None
     below_plan = variance < 0
-    state_class = "state-amber" if below_plan else "state-teal"
+    state_class = "state-red" if below_plan else "state-teal"
     glyph = "▼" if below_plan else "▲"
 
     with col_plan:
@@ -314,7 +319,7 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
         )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- The primary graphic: zero-anchored variance by region, amber to
+    # --- The primary graphic: zero-anchored variance by region, red to
     # the left, teal to the right. This replaces the eight-tile hero as the
     # dominant element on this tab.
     st.markdown("#### Variance by Region")
@@ -324,7 +329,7 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
         .sort_values("revenue_variance")
     )
     if not by_region.empty:
-        bar_colors = [COLOR_AMBER if v < 0 else COLOR_TEAL for v in by_region["revenue_variance"]]
+        bar_colors = [COLOR_RED_FILL if v < 0 else COLOR_TEAL for v in by_region["revenue_variance"]]
         fig = go.Figure(
             go.Bar(
                 x=by_region["revenue_variance"],
@@ -350,7 +355,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
 
     st.subheader("Product x Region Variance Heatmap")
     st.caption(
-        "Colour intensity is the variance percentage: amber below plan, teal "
+        "Colour intensity is the variance percentage: red below plan, teal "
         "above plan, zero-anchored at the neutral midpoint."
     )
 
@@ -432,7 +437,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         st.subheader("Variance Flag Distribution")
         st.caption(
             "NO_ACTUALS and NO_FORECAST are grain gaps, not a variance "
-            "direction, so they stay neutral rather than amber or teal."
+            "direction, so they stay neutral rather than red or teal."
         )
         flags = mart["variance_flag"].value_counts().reset_index()
         flags.columns = ["flag", "count"]

@@ -1,12 +1,23 @@
 /* Revenue Performance dashboard theme.
 
-Colour is reserved for two axes: variance (amber below plan, teal above
+Colour is reserved for two axes: variance (red below plan, teal above
 plan) and data quality (violet, quarantine only). Every other element in
 this file stays neutral -- tabs, chips, sliders and structural chrome carry
 no hue. Streamlit's own theme tokens (.streamlit/config.toml) set the
 neutral surface/text/border/font values that this stylesheet builds on;
 this file only adds the layout pieces Streamlit's theming API cannot reach
 (the lede sentence, the weighted figure cards, the reconciliation callouts).
+
+Source colours, in oklch (perceptually uniform, so lightness and chroma
+are chosen independently of hue). Hex below is the sRGB conversion, since
+that is what CSS custom properties and Streamlit's config need:
+  --red-fill:  oklch(0.60 0.20 27)  -> #DE3C37  (large fills: bar segments)
+  --red-text:  oklch(0.68 0.18 27)  -> #F36358  (text, numerals, 1px strokes)
+  --teal:      oklch(0.74 0.10 195) -> #50BFBE  (unchanged)
+  --violet:    oklch(0.68 0.11 305) -> #A886CF  (unchanged)
+The two variance poles differ in lightness as well as hue (relative
+luminance 0.19 for the red fill vs 0.42 for teal, a 0.23 gap) so the scale
+still reads correctly converted to greyscale.
 */
 
 :root {
@@ -14,7 +25,8 @@ this file only adds the layout pieces Streamlit's theming API cannot reach
     --border: #312D2A;
     --muted: #8A8581;
     --text: #EBE7E4;
-    --amber: #DC9242;
+    --red-fill: #DE3C37;
+    --red-text: #F36358;
     --teal: #50BFBE;
     --violet: #A886CF;
 }
@@ -74,7 +86,7 @@ this file only adds the layout pieces Streamlit's theming API cannot reach
     font-variant-numeric: tabular-nums;
 }
 
-.state-amber { color: var(--amber); }
+.state-red { color: var(--red-text); }
 .state-teal { color: var(--teal); }
 .state-violet { color: var(--violet); }
 
