@@ -12,7 +12,10 @@ pyspark = pytest.importorskip("pyspark")
 
 from pyspark.sql import SparkSession  # noqa: E402
 
-from spark.int_order_revenue_monthly_spark import aggregate_monthly_revenue  # noqa: E402
+from spark.int_order_revenue_monthly_spark import (  # noqa: E402
+    ARROW_ENABLED_CONFIG,
+    aggregate_monthly_revenue,
+)
 
 GRAIN = ["product_id", "region", "revenue_month"]
 DB_PATH = "warehouse.duckdb"
@@ -21,7 +24,10 @@ DB_PATH = "warehouse.duckdb"
 @pytest.fixture(scope="module")
 def spark():
     session = (
-        SparkSession.builder.appName("parity-test").master("local[2]").getOrCreate()
+        SparkSession.builder.appName("parity-test")
+        .master("local[2]")
+        .config(*ARROW_ENABLED_CONFIG)
+        .getOrCreate()
     )
     session.sparkContext.setLogLevel("ERROR")
     yield session

@@ -50,23 +50,18 @@ import duckdb
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
-# --- Second environment compatibility shim ----------------------------------
+# --- Arrow configuration note -------------------------------------------------
 # Without Arrow-based conversion, pyspark's pure-Python schema inference over
 # a pandas DataFrame mishandles pandas' nullable "boolean" extension dtype
 # (used here for is_active_account, which contains a real NULL) and raises
 # `PySparkTypeError: [CANNOT_MERGE_TYPE] Can not merge type BooleanType and
 # StructType`. pyarrow IS installed, but Arrow conversion is off by default in
-# this pyspark build. SparkSession is a JVM-wide singleton: whichever code
-# calls `SparkSession.builder....getOrCreate()` first decides the session's
-# configuration, and every later `getOrCreate()` (as in main() below, and in
-# tests/test_spark_parity.py's fixture) just reuses that same session. This
-# module is imported before any such session is created, so it is the one
-# place that can turn Arrow on -- with a runtime config flag, not a package
-# install or a change to pyproject.toml/uv.lock.
-if SparkSession.getActiveSession() is None:
-    SparkSession.builder.config(
-        "spark.sql.execution.arrow.pyspark.enabled", "true"
-    ).getOrCreate()
+# this pyspark build. SparkSession is a JVM-wide singleton, so this config
+# must be set on the builder at the point a session is actually created --
+# see `main()` below for standalone runs, and tests/test_spark_parity.py's
+# `spark` fixture for the test suite. Importing this module has no side
+# effects: it must not create or configure a session itself.
+ARROW_ENABLED_CONFIG = ("spark.sql.execution.arrow.pyspark.enabled", "true")
 # -----------------------------------------------------------------------------
 
 GRAIN = ["product_id", "region", "revenue_month"]
@@ -118,6 +113,7 @@ def main() -> None:
     spark = (
         SparkSession.builder.appName("int_order_revenue_monthly")
         .master("local[*]")
+        .config(*ARROW_ENABLED_CONFIG)
         .getOrCreate()
     )
     spark.sparkContext.setLogLevel("ERROR")
