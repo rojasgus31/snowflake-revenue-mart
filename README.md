@@ -76,8 +76,10 @@ That is the concrete evidence behind the "no dollar disappears" claim — not a
 tolerance band, an exact match. If a single dollar goes missing anywhere in the
 pipeline, `dbt build` fails.
 
-The full suite this build was verified against: **94 dbt results (15 models +
-1 seed + 78 tests) and 7 pytest tests, all passing.**
+The full suite this build was verified against: **94 dbt results (15 materialized
+models + 1 seed + 78 tests) and 7 pytest tests, all passing.** The project defines 16
+models; `stg_oracle__orders_flagged` is ephemeral, so it compiles into its consumers
+rather than producing a result row of its own.
 
 Two decisions worth calling out:
 
