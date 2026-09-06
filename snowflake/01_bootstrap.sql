@@ -14,6 +14,15 @@ create schema if not exists revenue_analytics.raw;
 create schema if not exists revenue_analytics.staging;
 create schema if not exists revenue_analytics.analytics;
 
+-- Deliberately no `create table` statements for the RAW schema here. The four
+-- raw tables (raw_oracle_orders, raw_salesforce_accounts, raw_adaptive_forecast,
+-- raw_erp_products) are created by the loader itself --
+-- `uv run python ingest/load_raw.py --target snowflake` -- which uses
+-- write_pandas(auto_create_table=True) so the table shape always matches what
+-- was actually loaded. Bootstrap only needs to exist so the LOADER role has
+-- somewhere to write; run the loader before the first dbt build, or every
+-- source() in transform/models/staging/_sources.yml will fail to resolve.
+
 -- Auto-suspend at the 60-second floor: on a trial, an idle warehouse is the
 -- single largest source of wasted credits.
 create warehouse if not exists wh_load_xs
