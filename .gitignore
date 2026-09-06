@@ -10,3 +10,9 @@ logs/
 transform/target/
 transform/dbt_packages/
 transform/logs/
+# sqlfluff's dbt templater compiles the project with cwd = project_dir, which
+# resolves profiles.yml's `path: warehouse.duckdb` relative to transform/
+# instead of the repo root -- so `sqlfluff lint` / `make lint` leaves a stray,
+# empty duplicate warehouse file here. The real, committed warehouse lives at
+# the repo root.
+transform/warehouse.duckdb

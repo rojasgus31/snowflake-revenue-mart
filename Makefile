@@ -19,7 +19,7 @@ app:
 	uv run streamlit run app/streamlit_app.py
 
 lint:
-	uv run sqlfluff lint transform/models --dialect duckdb
+	uv run sqlfluff lint transform/models
 
 clean:
 	rm -rf warehouse.duckdb transform/target transform/dbt_packages

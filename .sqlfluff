@@ -1,0 +1,28 @@
+[sqlfluff]
+# Lint through dbt so Jinja macros and packages (dbt_utils, this project's own
+# delivery_status macro) resolve instead of coming back as undefined template
+# variables. Without this, sqlfluff parses raw, un-rendered Jinja and reports
+# two spurious templater errors on top of everything else.
+templater = dbt
+dialect = duckdb
+
+# This project's SQL uses a deliberate, consistent alignment style: `as` and
+# `then` keywords lined up in columns, join predicates aligned on `=`, and
+# occasional long comment lines used for the "why" documentation this repo
+# leans on throughout (see transform/macros/delivery_status.sql,
+# transform/models/marts/mart_revenue_performance.sql). Default sqlfluff would
+# ask us to collapse that alignment and hard-wrap comments at 80 characters,
+# which would make the SQL harder to read, not easier. Rather than reformat
+# working, readable SQL to satisfy defaults, we relax the specific rules that
+# conflict with this chosen style:
+#   LT01 (layout.spacing)      -- extra spaces used to align `as`/`then`/`=`
+#   LT02 (layout.indent)       -- indentation that follows the same alignment
+#   LT05 (layout.long_lines)   -- long explanatory comment lines
+#   ST06 (structure.column_order) -- this project orders columns by meaning
+#     (identifiers, then attributes, then derived values), not by a
+#     wildcard/simple/calculation split
+exclude_rules = LT01, LT02, LT05, ST06
+
+[sqlfluff:templater:dbt]
+project_dir = transform
+profiles_dir = transform
