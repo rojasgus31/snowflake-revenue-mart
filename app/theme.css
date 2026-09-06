@@ -1,22 +1,30 @@
 /* Revenue Performance dashboard theme.
 
 Colour is reserved for three axes: variance (red below plan, teal above
-plan), data quality (violet, quarantine only), and now amber for a state
-that is genuinely pending or in flight, never a judged outcome. Every
-other element in this file stays neutral -- tabs, chips, sliders and
-structural chrome carry no hue. Streamlit's own theme tokens
-(.streamlit/config.toml) set the neutral surface/text/border/font values
-that this stylesheet builds on; this file only adds the layout pieces
-Streamlit's theming API cannot reach (the lede sentence, the weighted
-figure cards, the reconciliation callouts, the filter strip, and the
-type-scale amplification below).
+plan), data quality (violet, quarantine only), and amber for a state that
+is genuinely pending or in flight, never a judged outcome. That is the
+DATA weight of red -- full-strength, saturated, and it never appears
+anywhere else.
+
+Chrome (tabs, chips, sliders, focus rings, the title rule, the small
+heading marker) now carries the house accent, but at a second, much
+lighter weight of the same hue: same hue angle as the data red, roughly
+half its chroma and a touch lighter. Two weights of one hue, never
+confused for each other -- see the ACCENT block below for the exact
+numbers. Streamlit's own theme tokens (.streamlit/config.toml) set the
+primaryColor/linkColor that drive the tab underline, focus rings and
+slider out of the box; this file adds the layout pieces Streamlit's
+theming API cannot reach (the lede sentence, the weighted figure cards,
+the reconciliation callouts, the filter strip, the multiselect chip
+softening, the title rule, the heading marker, and the type-scale
+amplification below).
 
 Source colours, in oklch (perceptually uniform, so lightness and chroma
 are chosen independently of hue), darkened relative to their old dark-mode
 values so each clears 4.5:1 against the warm off-white surface. Hex below
 is the sRGB conversion, since that is what CSS custom properties and
 Streamlit's config need:
-  --red:    oklch(0.52 0.20 27)  -> #C2181D  (5.76:1 on surface)
+  --red:    oklch(0.52 0.20 27)  -> #C2181D  (5.76:1 on surface) -- DATA weight
   --teal:   oklch(0.50 0.10 195) -> #007475  (5.28:1 on surface)
   --violet: oklch(0.50 0.13 305) -> #754D9E  (5.99:1 on surface)
   --amber:  #B45309 (measured 4.74:1 on surface, warm family, not a bright
@@ -24,6 +32,21 @@ Streamlit's config need:
 A single red now covers both text and fills; on a light surface one value
 clears 4.5:1 for both, unlike the dark theme, which needed a lighter
 "text" variant alongside the deeper "fill" one.
+
+ACCENT (chrome weight), same hue (27) as --red, half the chroma and a
+touch lighter, so it reads as a muted, receding rose next to the data
+red's bold, saturated fill:
+  --accent:       oklch(0.55 0.10 27) -> #A45951 (4.81:1 on surface --
+                  clears AA text, used for the active tab label and links)
+  --chip-tint:    oklch(0.95 0.02 27) -> #FCEAE7 (background only, a light
+                  tint, never a solid fill)
+  --chip-text:    oklch(0.38 0.13 27) -> #791A18 (9.16:1 on --chip-tint)
+  --chip-border:  oklch(0.72 0.08 27) -> #D0938B (subtle, deliberately low
+                  contrast -- a border, not a warning)
+Delta vs --red: chroma is roughly half (0.10 vs 0.20) and lightness is a
+touch higher (0.55 vs 0.52). That is enough separation that the eye reads
+the chrome accent as a light, quiet tint and the data red as the
+strongest, most saturated mark on the page -- never the same weight.
 */
 
 :root {
@@ -36,6 +59,10 @@ clears 4.5:1 for both, unlike the dark theme, which needed a lighter
     --teal: #007475;
     --violet: #754D9E;
     --amber: #B45309;
+    --accent: #A45951;
+    --chip-tint: #FCEAE7;
+    --chip-text: #791A18;
+    --chip-border: #D0938B;
 }
 
 /* --- Type scale, amplified ------------------------------------------
@@ -46,11 +73,17 @@ After: decisive jumps instead of a uniform ramp, and weight now carries
 as much of the contrast as size does -- figures are heavy, their labels
 are light, so the eye lands on the number first every time. */
 
+/* The page title carries a thin accent rule underneath -- not a border-left,
+not a fill behind the text, just a 2px underline in the chrome weight of
+red so the accent threads through the very top of the page as well as the
+tabs and filter strip below it. */
 h1 {
     font-weight: 700 !important;
     font-size: 2.75rem !important;
     letter-spacing: -0.01em;
     margin-bottom: 0.15em !important;
+    padding-bottom: 0.25em;
+    border-bottom: 2px solid var(--accent);
 }
 
 h2 {
@@ -58,12 +91,26 @@ h2 {
     font-size: 1.6rem !important;
 }
 
-/* st.subheader */
+/* st.subheader. The small square marker before each heading is the accent
+in its chrome weight -- a mark that says "section starts here", not a
+judgement about the section's content, so it stays at accent strength,
+never the saturated data red. */
 h3 {
     font-weight: 600 !important;
     font-size: 1.2rem !important;
     margin-top: 1.6em !important;
     margin-bottom: 0.3em !important;
+}
+
+h3::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 9px;
+    background: var(--accent);
+    border-radius: 1px;
+    vertical-align: middle;
 }
 
 /* Markdown "####" section titles, e.g. "Variance by Region" */
@@ -73,6 +120,17 @@ h4 {
     letter-spacing: 0.01em;
     margin-top: 1.4em !important;
     margin-bottom: 0.4em !important;
+}
+
+h4::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 8px;
+    background: var(--accent);
+    border-radius: 1px;
+    vertical-align: middle;
 }
 
 .lede {
@@ -189,6 +247,28 @@ sidebar container that no longer exists. */
     overflow: visible;
     text-overflow: unset;
     word-break: break-word;
+}
+
+/* Streamlit's own multiselect chip fills solid with primaryColor by
+default -- once primaryColor is the accent red, that reads as a warning
+badge on every filter selection, which is the exact defect this pass is
+fixing. A chip is a selected filter, not a semantic state, so it gets the
+chrome weight only: a light tint background, dark red text for contrast
+(9.16:1 measured on --chip-tint), and a subtle border -- never the
+saturated fill. The close ("x") icon is recoloured to match so it does
+not read as a stray, uncoloured fragment sitting on a tinted chip. */
+[data-baseweb="tag"] {
+    background-color: var(--chip-tint) !important;
+    border: 1px solid var(--chip-border) !important;
+    color: var(--chip-text) !important;
+}
+
+[data-baseweb="tag"] span {
+    color: var(--chip-text) !important;
+}
+
+[data-baseweb="tag"] svg {
+    fill: var(--chip-text) !important;
 }
 
 /* --- Filter row: presence without hue ---------------------------------

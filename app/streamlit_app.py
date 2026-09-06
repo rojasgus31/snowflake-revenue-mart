@@ -16,11 +16,16 @@ in-flight rather than judged good or bad, all darkened to clear 4.5:1 on
 the warm off-white surface. A bar fill is never the text colour -- text is
 for text -- so a truly excluded, no-judgement category (an order that was
 Cancelled, and so is deliberately excluded from revenue) stays grey
-instead. Structural chrome (tabs, filter chips, sliders, focus rings)
-carries no hue at all; that neutrality comes from .streamlit/config.toml's
-theme tokens. app/theme.css adds the handful of layout pieces (the lede
-sentence, the weighted figure cards, the reconciliation callouts, the
-filter strip) that Streamlit's theming API cannot reach on its own.
+instead. Structural chrome (tabs, filter chips, sliders, focus rings, the
+title rule, the heading marker) carries the same red hue as the data, but
+at a second, much lighter weight -- low saturation, a tint rather than a
+fill -- so the house accent threads through the page without ever being
+mistaken for a semantic reading. That split comes from
+.streamlit/config.toml's theme tokens (primaryColor/linkColor set to the
+accent weight) plus app/theme.css, which adds the layout pieces
+Streamlit's theming API cannot reach (the lede sentence, the weighted
+figure cards, the reconciliation callouts, the filter strip, the
+multiselect chip softening, the title rule and heading marker).
 """
 
 from __future__ import annotations

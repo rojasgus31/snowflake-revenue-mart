@@ -17,12 +17,18 @@ textColor = "#24211E"
 borderColor = "#DAD7D3"
 dataframeBorderColor = "#DAD7D3"
 dataframeHeaderBackgroundColor = "#F3EFED"
-# Neutral on purpose: this drives tab underlines, chip fills, slider tracks
-# and focus rings. None of those are semantic states, so none of them get
-# the variance or data-quality hues -- that is the single biggest visual
-# change in this redesign, light mode or dark.
-primaryColor = "#6C6864"
-linkColor = "#6C6864"
+# The house accent: this drives the active tab underline and label,
+# focus rings, and the slider's active track and handle. It is a LOW
+# saturation red -- oklch(0.55 0.10 27), half the chroma of the full
+# saturation --red used for shortfall in charts (oklch(0.52 0.20 27),
+# #C2181D) -- so it never competes with, or is mistaken for, the
+# semantic red that means "below plan" in the data. Streamlit's default
+# multiselect chip fill is solid primaryColor, which would read as a
+# warning on every filter selection; app/theme.css overrides the chip to
+# a light tint instead so the chrome stays a tint, never a saturated
+# fill, everywhere it appears.
+primaryColor = "#A45951"
+linkColor = "#A45951"
 font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap, -apple-system, sans-serif"
 headingFont = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap, -apple-system, sans-serif"
 codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap, ui-monospace, monospace"

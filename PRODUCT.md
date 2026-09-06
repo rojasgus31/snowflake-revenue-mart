@@ -52,10 +52,17 @@ Confidence comes from precision, never from emphasis.
 
 ## Strategic design principles
 
-1. **Colour carries meaning or it is not used.** Neutrals do the structural
-   work. Hue is reserved for the semantics of the data: above or below plan,
-   trusted or quarantined. A filter chip is not a semantic state and gets no
-   hue.
+1. **Chrome carries the accent at low saturation, data carries it at full
+   strength.** The house red now runs through the chrome too -- the active
+   tab, links, focus rings, the slider, a rule under the title, a marker on
+   section headings -- but always as a second, much lighter weight of the
+   same hue: low saturation, a tint or a thin line, never a saturated fill.
+   Full-strength red stays reserved for the semantics of the data: below
+   plan, and only below plan. A filter chip is not a semantic state, so it
+   gets a light tint with dark text, never the saturated fill; a reader must
+   still be able to tell, at a glance, that a bold red bar means a number is
+   short, while a light red underline or chip just means "selected" or "you
+   are here."
 
 2. **Do not let the framing lie.** Headline variance is roughly -84%, which
    reads as collapse. The truth is that 187 of 289 product-region-months
