@@ -3,7 +3,12 @@ revenue_performance:
   outputs:
     duckdb:
       type: duckdb
-      path: ../warehouse.duckdb
+      # This path is resolved relative to the current working directory dbt is
+      # invoked from, NOT relative to this project directory. The Makefile is the
+      # sanctioned entry point for this project and it always invokes dbt from the
+      # repository root, so this must match the default db_path in
+      # ingest/load_raw.py (warehouse.duckdb at the repo root).
+      path: warehouse.duckdb
       threads: 4
 
     snowflake:
