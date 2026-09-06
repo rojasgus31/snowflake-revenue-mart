@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: int_orders_enriched
+    description: >
+      Order lines with region and standard cost attached. Left joins throughout:
+      a failed dimension lookup degrades an attribute, never deletes revenue.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: region
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["LATAM", "North America", "EMEA", "APAC", "UNMAPPED"]
+      - name: delivery_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["On Time", "Late", "Not Delivered", "Cancelled", "Unknown"]
+      - name: revenue_month
+        data_tests: [not_null]
+      - name: gross_revenue
+        data_tests: [not_null]
