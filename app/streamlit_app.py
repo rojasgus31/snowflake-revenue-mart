@@ -119,6 +119,23 @@ def _style_plot(fig: go.Figure) -> go.Figure:
         color=COLOR_MUTED, tickfont=dict(family=FONT_MONO, color=COLOR_MUTED),
         title_font=dict(family=FONT_SANS, color=COLOR_MUTED, size=13),
     )
+    # Value labels sit outside the end of a bar, which puts them past the axis
+    # range. Without this they are silently trimmed to fit the plot area, so a
+    # figure reads as "05,857" when it is -8,205,857. Let them draw beyond the
+    # axis and pad the plot so there is somewhere for them to go.
+    # "auto" puts the value inside the bar when it fits and outside when it
+    # does not. Forcing it outside pushed long negative bars' labels on top of
+    # the category names; forcing it inside would hide the short ones. Inside
+    # text is drawn in the surface colour so it stays legible on a filled bar.
+    fig.update_traces(
+        cliponaxis=False,
+        textposition="auto",
+        insidetextfont=dict(family=FONT_MONO, color=COLOR_SURFACE),
+        outsidetextfont=dict(family=FONT_MONO, color=COLOR_TEXT),
+        selector=dict(type="bar"),
+    )
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
     return fig
 
 
