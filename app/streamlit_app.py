@@ -19,13 +19,25 @@ DB_PATH = Path(__file__).resolve().parent.parent / "warehouse.duckdb"
 st.set_page_config(page_title="Revenue Performance", page_icon="📊", layout="wide")
 
 
+def _warehouse_mtime() -> float:
+    return DB_PATH.stat().st_mtime
+
+
 @st.cache_data
-def query(sql: str) -> pd.DataFrame:
+def _cached_query(sql: str, db_mtime: float) -> pd.DataFrame:
     connection = duckdb.connect(str(DB_PATH), read_only=True)
     try:
         return connection.execute(sql).fetch_df()
     finally:
         connection.close()
+
+
+def query(sql: str) -> pd.DataFrame:
+    # db_mtime is passed into the cached function purely so Streamlit's cache
+    # key includes it: whenever `make build` rewrites warehouse.duckdb the
+    # mtime changes, which invalidates the cache instead of serving stale
+    # numbers for the life of the process.
+    return _cached_query(sql, _warehouse_mtime())
 
 
 def render_header() -> None:
@@ -116,18 +128,26 @@ def main() -> None:
         st.error("warehouse.duckdb not found. Run `make ingest && make build` first.")
         return
 
-    render_header()
-    mart = query("select * from analytics.mart_revenue_performance")
+    try:
+        render_header()
+        mart = query("select * from analytics.mart_revenue_performance")
 
-    regions = st.sidebar.multiselect(
-        "Region", sorted(mart["region"].unique()), default=list(mart["region"].unique())
-    )
-    filtered = mart[mart["region"].isin(regions)] if regions else mart
+        regions = st.sidebar.multiselect(
+            "Region", sorted(mart["region"].unique()), default=list(mart["region"].unique())
+        )
+        filtered = mart[mart["region"].isin(regions)] if regions else mart
 
-    render_kpis(filtered)
-    render_variance_chart(filtered)
-    render_region_breakdown(filtered)
-    render_data_quality()
+        render_kpis(filtered)
+        render_variance_chart(filtered)
+        render_region_breakdown(filtered)
+        render_data_quality()
+    except duckdb.Error as error:
+        st.error(
+            "The warehouse looks incomplete (a required table could not be "
+            "read). Run `make ingest && make build` to rebuild it.\n\n"
+            f"Details: {error}"
+        )
+        return
 
 
 main()
