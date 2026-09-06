@@ -1,0 +1,13 @@
+product_id,product_name,product_family,lifecycle_status,standard_cost
+PROD001,Fictitious Device 01,Coronary IVL,Active,1309.14
+PROD002,Fictitious Device 02,Peripheral IVL,Active,387.52
+PROD003,Fictitious Device 03,Imaging Accessories,Active,762.54
+PROD004,Fictitious Device 04,Catheter Systems,Active,684.82
+PROD005,Fictitious Device 05,Coronary IVL,Active,1454.71
+PROD006,Fictitious Device 06,Peripheral IVL,Active,1365.05
+PROD007,Fictitious Device 07,Imaging Accessories,Active,1688.27
+PROD008,Fictitious Device 08,Catheter Systems,Active,480.41
+PROD009,Fictitious Device 09,Coronary IVL,Active,982.88
+PROD010,Fictitious Device 10,Peripheral IVL,Discontinued,394.7
+PROD011,Fictitious Device 11,Imaging Accessories,Active,677.96
+PROD012,Fictitious Device 12,Catheter Systems,Pending,1108.03

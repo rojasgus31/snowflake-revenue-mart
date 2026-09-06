@@ -1,0 +1,21 @@
+account_id,customer_id,account_name,region,account_owner,segment,active_flag
+SF-1001,CUST001,Fictitious Medical Partner 01,LATAM,Avery Johnson,Enterprise,TRUE
+SF-1002,CUST002,Fictitious Medical Partner 02,North America,Mia Chen,Mid-Market,TRUE
+SF-1003,CUST003,Fictitious Medical Partner 03,EMEA,Carlos Ramirez,SMB,TRUE
+SF-1004,CUST004,Fictitious Medical Partner 04,APAC,Priya Nair,Enterprise,TRUE
+SF-1005,CUST005,Fictitious Medical Partner 05,LATAM,Daniel Smith,Mid-Market,TRUE
+SF-1006,CUST006,Fictitious Medical Partner 06,North America,Sofia Martinez,SMB,TRUE
+SF-1007,CUST007,Fictitious Medical Partner 07,EMEA,Avery Johnson,Enterprise,FALSE
+SF-1008,CUST008,Fictitious Medical Partner 08,APAC,Mia Chen,Mid-Market,TRUE
+SF-1009,CUST009,Fictitious Medical Partner 09,LATAM,Carlos Ramirez,SMB,TRUE
+SF-1010,CUST010,Fictitious Medical Partner 10,North America,Priya Nair,Enterprise,TRUE
+SF-1011,CUST011,Fictitious Medical Partner 11,EMEA,Daniel Smith,Mid-Market,TRUE
+SF-1012,CUST012,Fictitious Medical Partner 12,APAC,Sofia Martinez,SMB,TRUE
+SF-1013,CUST013,Fictitious Medical Partner 13,LATAM,Avery Johnson,Enterprise,TRUE
+SF-1014,CUST014,Fictitious Medical Partner 14,North America,Mia Chen,Mid-Market,TRUE
+SF-1015,CUST015,Fictitious Medical Partner 15,EMEA,Carlos Ramirez,SMB,TRUE
+SF-1016,CUST016,Fictitious Medical Partner 16,APAC,Priya Nair,Enterprise,FALSE
+SF-1017,CUST017,Fictitious Medical Partner 17,LATAM,Daniel Smith,Mid-Market,TRUE
+SF-1018,CUST018,Fictitious Medical Partner 18,North America,Sofia Martinez,SMB,TRUE
+SF-1019,CUST019,Fictitious Medical Partner 19,EMEA,Avery Johnson,Enterprise,TRUE
+SF-1020,CUST020,Fictitious Medical Partner 20,APAC,Mia Chen,Mid-Market,TRUE

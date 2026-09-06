@@ -1,0 +1,25 @@
+[project]
+name = "revenue-performance-mart"
+version = "0.1.0"
+description = "Snowflake + dbt revenue performance mart over the Sr. Data Engineer assessment dataset"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "dbt-core~=1.10.0",
+    "dbt-duckdb~=1.10.0",
+    "dbt-snowflake~=1.10.0",
+    "duckdb~=1.5.0",
+    "pandas~=2.2.0",
+    "streamlit~=1.40.0",
+    "plotly~=5.24.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest~=8.3.0",
+    "pyspark~=3.5.0",
+    "sqlfluff~=3.2.0",
+    "sqlfluff-templater-dbt~=3.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
