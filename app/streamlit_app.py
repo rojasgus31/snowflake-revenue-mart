@@ -1,43 +1,22 @@
 """Revenue performance dashboard.
 
-Reads the committed DuckDB file directly, so the deployed app needs no
-warehouse credentials and keeps working after the Snowflake trial expires.
-Read-only connection: the dashboard is a consumer of the mart, never a writer.
+Reads the `analytics` mart through `data_source.py`, which resolves at
+runtime to a live Snowflake connection (a Snowpark session when deployed as
+Streamlit in Snowflake, or SNOWFLAKE_* environment settings otherwise) or,
+failing both, the committed DuckDB file -- so the app keeps working with no
+warehouse credentials and after the Snowflake trial expires. Read-only in
+every case: the dashboard is a consumer of the mart, never a writer.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import duckdb
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-DB_PATH = Path(__file__).resolve().parent.parent / "warehouse.duckdb"
+from data_source import DataSourceError, backend_name, query
 
 st.set_page_config(page_title="Revenue Performance", page_icon="📊", layout="wide")
-
-
-def _warehouse_mtime() -> float:
-    return DB_PATH.stat().st_mtime
-
-
-@st.cache_data
-def _cached_query(sql: str, db_mtime: float) -> pd.DataFrame:
-    connection = duckdb.connect(str(DB_PATH), read_only=True)
-    try:
-        return connection.execute(sql).fetch_df()
-    finally:
-        connection.close()
-
-
-def query(sql: str) -> pd.DataFrame:
-    # db_mtime is passed into the cached function purely so Streamlit's cache
-    # key includes it: whenever `make build` rewrites warehouse.duckdb the
-    # mtime changes, which invalidates the cache instead of serving stale
-    # numbers for the life of the process.
-    return _cached_query(sql, _warehouse_mtime())
 
 
 def render_header() -> None:
@@ -46,6 +25,7 @@ def render_header() -> None:
         "Actual against plan at product x region x month. Per-order delivery "
         "detail lives in fct_orders — the two grains are deliberately separate."
     )
+    st.caption(f"Data source: {backend_name()}")
 
 
 def render_kpis(mart: pd.DataFrame) -> None:
@@ -124,10 +104,6 @@ def render_data_quality() -> None:
 
 
 def main() -> None:
-    if not DB_PATH.exists():
-        st.error("warehouse.duckdb not found. Run `make ingest && make build` first.")
-        return
-
     try:
         render_header()
         mart = query("select * from analytics.mart_revenue_performance")
@@ -141,12 +117,8 @@ def main() -> None:
         render_variance_chart(filtered)
         render_region_breakdown(filtered)
         render_data_quality()
-    except duckdb.Error as error:
-        st.error(
-            "The warehouse looks incomplete (a required table could not be "
-            "read). Run `make ingest && make build` to rebuild it.\n\n"
-            f"Details: {error}"
-        )
+    except DataSourceError as error:
+        st.error(str(error))
         return
 
 
