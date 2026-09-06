@@ -16,6 +16,14 @@ revenue_performance:
       account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
       user: "{{ env_var('SNOWFLAKE_USER', '') }}"
       password: "{{ env_var('SNOWFLAKE_PASSWORD', '') }}"
+      # Defaults to Snowflake's own username/password authentication. Set
+      # SNOWFLAKE_AUTHENTICATOR=externalbrowser to sign in through the browser
+      # instead, which is what accounts using SSO or OAuth need and what avoids
+      # storing a password at all. The adapter passes this value straight
+      # through to the connector, so any authenticator the connector supports
+      # works here. For unattended runs such as CI, prefer key-pair auth:
+      # set this to jwt and add private_key_path.
+      authenticator: "{{ env_var('SNOWFLAKE_AUTHENTICATOR', 'snowflake') }}"
       role: "{{ env_var('SNOWFLAKE_ROLE', 'TRANSFORMER') }}"
       warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'WH_TRANSFORM_XS') }}"
       database: "{{ env_var('SNOWFLAKE_DATABASE', 'REVENUE_ANALYTICS') }}"

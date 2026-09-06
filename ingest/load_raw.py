@@ -44,11 +44,19 @@ SOURCE_TABLES = {
 SNOWFLAKE_ENV_VARS = {
     "account": "SNOWFLAKE_ACCOUNT",
     "user": "SNOWFLAKE_USER",
-    "password": "SNOWFLAKE_PASSWORD",
     "role": "SNOWFLAKE_ROLE",
     "warehouse": "SNOWFLAKE_WAREHOUSE",
     "database": "SNOWFLAKE_DATABASE",
 }
+
+# Authentication is deliberately separate from the variables above. Password is
+# only required when authenticating with a password; an account using SSO or
+# OAuth signs in through the browser and never has one. SNOWFLAKE_AUTHENTICATOR
+# mirrors the same setting in transform/profiles.yml so the loader and dbt
+# always authenticate the same way.
+SNOWFLAKE_AUTHENTICATOR_VAR = "SNOWFLAKE_AUTHENTICATOR"
+SNOWFLAKE_PASSWORD_VAR = "SNOWFLAKE_PASSWORD"
+DEFAULT_AUTHENTICATOR = "snowflake"
 
 
 def _new_batch() -> tuple[str, datetime]:
@@ -125,8 +133,31 @@ def _snowflake_credentials_from_env() -> dict[str, str]:
             f"{', '.join(missing)}. Set the same variables transform/profiles.yml "
             "expects for the `snowflake` target -- see snowflake/README.md."
         )
+
     credentials = {key: os.environ[env_name] for key, env_name in SNOWFLAKE_ENV_VARS.items()}
     credentials["schema"] = "raw"
+
+    authenticator = os.environ.get(SNOWFLAKE_AUTHENTICATOR_VAR, DEFAULT_AUTHENTICATOR)
+    credentials["authenticator"] = authenticator
+
+    # Only password authentication needs a password. Demanding one for a
+    # browser-based sign-in would block accounts that legitimately do not have
+    # one, so require it exactly when it is actually used.
+    if authenticator == DEFAULT_AUTHENTICATOR:
+        password = os.environ.get(SNOWFLAKE_PASSWORD_VAR)
+        if not password:
+            raise SystemExit(
+                f"Cannot load into Snowflake: {SNOWFLAKE_PASSWORD_VAR} is not set. "
+                f"Either set it, or set {SNOWFLAKE_AUTHENTICATOR_VAR}=externalbrowser "
+                "to sign in through the browser instead -- see snowflake/README.md."
+            )
+        credentials["password"] = password
+    else:
+        # Browser-based sign-in caches its token, so a repeat run does not
+        # reopen the browser. Without this every invocation prompts again,
+        # which makes the loader unusable in a scripted sequence.
+        credentials["client_store_temporary_credential"] = True
+
     return credentials
 
 
@@ -156,7 +187,10 @@ def load_raw_to_snowflake(data_dir: str = "data/raw") -> dict[str, int]:
     row_counts: dict[str, int] = {}
     connection = connect(**credentials)
     try:
-        connection.cursor().execute("create schema if not exists raw")
+        # The RAW schema is created by snowflake/01_bootstrap.sql, not here.
+        # LOADER deliberately holds CREATE TABLE on that schema and nothing
+        # wider -- no CREATE SCHEMA on the database -- so creating it from the
+        # loader would require handing the role a privilege it should not have.
         for file_name, table_name in SOURCE_TABLES.items():
             csv_path = _resolve_csv_path(data_dir, file_name)
             row_counts[table_name] = _load_one_snowflake(
@@ -190,6 +224,10 @@ def _load_one_snowflake(
         table_name.upper(),
         auto_create_table=True,
         overwrite=True,
+        # _loaded_at is timezone-aware. Without this, the connector warns that
+        # it may write the timestamp incorrectly, because it falls back to a
+        # timezone-naive Snowflake type.
+        use_logical_type=True,
     )
     if not success:
         raise RuntimeError(f"write_pandas did not report success for {table_name}")
