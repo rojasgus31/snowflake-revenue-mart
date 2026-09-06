@@ -1,0 +1,75 @@
+# Publishes the dbt lineage graph, model documentation and test results as a
+# browsable static site on GitHub Pages. `dbt docs generate` writes
+# index.html, manifest.json and catalog.json into transform/target/, and that
+# directory is served as-is -- no separate build step is needed.
+#
+# This runs the full build first (against DuckDB, the project's default
+# target) so the generated catalog reflects real, populated tables rather than
+# empty schemas. Regenerating this site against the Snowflake target instead
+# (see docs/evidence/README.md) upgrades it from a DuckDB build to a
+# Snowflake one -- the model code and the generated site are identical either
+# way, only the underlying data changes.
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  pages: write
+  id-token: write
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Install dbt packages
+        run: uv run dbt deps --project-dir transform --profiles-dir transform
+
+      - name: Land source data
+        run: uv run python ingest/load_raw.py
+
+      - name: Build and test the warehouse
+        run: uv run dbt build --project-dir transform --profiles-dir transform
+
+      - name: Generate the docs site
+        run: uv run dbt docs generate --project-dir transform --profiles-dir transform
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload docs site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: transform/target/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
