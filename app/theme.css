@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;600;700&display=swap');
+
 /* Revenue Performance dashboard theme.
 
 Colour is reserved for three axes: variance (red below plan, teal above
@@ -14,10 +16,7 @@ confused for each other -- see the ACCENT block below for the exact
 numbers. Streamlit's own theme tokens (.streamlit/config.toml) set the
 primaryColor/linkColor that drive the tab underline, focus rings and
 slider out of the box; this file adds the layout pieces Streamlit's
-theming API cannot reach (the lede sentence, the weighted figure cards,
-the reconciliation callouts, the filter strip, the multiselect chip
-softening, the title rule, the heading marker, and the type-scale
-amplification below).
+theming API cannot reach.
 
 Source colours, in oklch (perceptually uniform, so lightness and chroma
 are chosen independently of hue), darkened relative to their old dark-mode
@@ -30,8 +29,7 @@ Streamlit's config need:
   --amber:  #B45309 (measured 4.74:1 on surface, warm family, not a bright
             or neon orange)
 A single red now covers both text and fills; on a light surface one value
-clears 4.5:1 for both, unlike the dark theme, which needed a lighter
-"text" variant alongside the deeper "fill" one.
+clears 4.5:1 for both.
 
 ACCENT (chrome weight), same hue (27) as --red, half the chroma and a
 touch lighter, so it reads as a muted, receding rose next to the data
@@ -43,11 +41,19 @@ red's bold, saturated fill:
   --chip-text:    oklch(0.38 0.13 27) -> #791A18 (9.16:1 on --chip-tint)
   --chip-border:  oklch(0.72 0.08 27) -> #D0938B (subtle, deliberately low
                   contrast -- a border, not a warning)
-Delta vs --red: chroma is roughly half (0.10 vs 0.20) and lightness is a
-touch higher (0.55 vs 0.52). That is enough separation that the eye reads
-the chrome accent as a light, quiet tint and the data red as the
-strongest, most saturated mark on the page -- never the same weight.
-*/
+
+-------------------------------------------------------------------------
+LAYOUT, restructured: ruled bands, not floating cards.
+
+Every panel that used to sit as an isolated bordered box on a blank field
+(figure cards, callouts, the filter strip) is now a full-width band on the
+page, separated from its neighbour by a single 1px hairline rule in
+--border. No shadows, no rounded containers, no nested boxes: content
+sits directly on the surface. Spacing follows an 8px base scale
+(8/16/24/32/48) applied UNEVENLY -- 8px between things that belong to each
+other (a figure and its sub-line), 32-48px at a real section break -- so
+density reads as a deliberate hierarchy rather than uniform padding.
+------------------------------------------------------------------------- */
 
 :root {
     --surface: #FAF8F6;
@@ -63,43 +69,74 @@ strongest, most saturated mark on the page -- never the same weight.
     --chip-tint: #FCEAE7;
     --chip-text: #791A18;
     --chip-border: #D0938B;
+
+    /* 8px base spacing scale -- see DESIGN.md for the rule on when each
+    step applies. Named, not just numbered, so a call site reads as intent
+    ("space-section") rather than an arbitrary pixel count. */
+    --space-1: 8px;
+    --space-2: 16px;
+    --space-3: 24px;
+    --space-4: 32px;
+    --space-5: 48px;
+
+    /* Gutter between adjacent columns, tightened from Streamlit's default
+    ~2.5rem down to roughly 12px so related columns read as one region
+    instead of two distant islands. */
+    --gutter: 12px;
+
+    /* Type scale: 11 / 13 / 16 / 22 / 32 / 48. A decisive spread, not a
+    uniform 1.25x ramp, so the eye has an unambiguous answer to "what is
+    the single most important thing on this tab". */
+    --text-2xs: 11px;
+    --text-xs: 13px;
+    --text-sm: 16px;
+    --text-md: 22px;
+    --text-lg: 32px;
+    --text-xl: 48px;
 }
 
-/* --- Type scale, amplified ------------------------------------------
-Before: title ~2.25rem/700, subheads ~1.5rem, figure primary 37px/600,
-figure secondary 28px/600, body ~16px -- a flat, roughly 1.25x ramp with
-little to tell the reader what to look at first.
-After: decisive jumps instead of a uniform ramp, and weight now carries
-as much of the contrast as size does -- figures are heavy, their labels
-are light, so the eye lands on the number first every time. */
+/* Reduce Streamlit's default page padding so content occupies the width
+it has instead of floating in a wide, empty gutter. */
+[data-testid="stAppViewContainer"] .block-container {
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-4);
+    max-width: 100%;
+}
 
-/* The page title carries a thin accent rule underneath -- not a border-left,
-not a fill behind the text, just a 2px underline in the chrome weight of
-red so the accent threads through the very top of the page as well as the
-tabs and filter strip below it. */
+/* Tightened column gutters, applied to every horizontal block regardless
+of the `gap` argument passed to st.columns, so 12px is the one gutter
+width in the app rather than a per-call choice. */
+[data-testid="stHorizontalBlock"] {
+    gap: var(--gutter) !important;
+}
+
+/* --- Type scale ------------------------------------------------------
+Weight now carries as much of the contrast as size does: figures are
+heavy, their labels are light and condensed, so the eye lands on the
+number first every time. */
+
 h1 {
     font-weight: 700 !important;
-    font-size: 2.75rem !important;
+    font-size: var(--text-lg) !important;
     letter-spacing: -0.01em;
-    margin-bottom: 0.15em !important;
-    padding-bottom: 0.25em;
-    border-bottom: 2px solid var(--accent);
+    margin-bottom: 2px !important;
+    padding-bottom: 0 !important;
+    border-bottom: none;
 }
 
 h2 {
     font-weight: 600 !important;
-    font-size: 1.6rem !important;
+    font-size: var(--text-md) !important;
 }
 
 /* st.subheader. The small square marker before each heading is the accent
 in its chrome weight -- a mark that says "section starts here", not a
-judgement about the section's content, so it stays at accent strength,
-never the saturated data red. */
+judgement about the section's content. */
 h3 {
     font-weight: 600 !important;
-    font-size: 1.2rem !important;
-    margin-top: 1.6em !important;
-    margin-bottom: 0.3em !important;
+    font-size: var(--text-md) !important;
+    margin-top: var(--space-4) !important;
+    margin-bottom: var(--space-1) !important;
 }
 
 h3::before {
@@ -113,13 +150,16 @@ h3::before {
     vertical-align: middle;
 }
 
-/* Markdown "####" section titles, e.g. "Variance by Region" */
+/* Markdown "####" section titles, e.g. "Variance by Region" -- a dense
+label, so it takes the Condensed face rather than the sans face h1-h3 use. */
 h4 {
+    font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif;
     font-weight: 600 !important;
-    font-size: 1.02rem !important;
-    letter-spacing: 0.01em;
-    margin-top: 1.4em !important;
-    margin-bottom: 0.4em !important;
+    font-size: var(--text-xs) !important;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-top: var(--space-3) !important;
+    margin-bottom: var(--space-1) !important;
 }
 
 h4::before {
@@ -134,35 +174,38 @@ h4::before {
 }
 
 .lede {
-    font-size: 22px;
+    font-size: var(--text-md);
     line-height: 1.5;
     font-weight: 500;
     color: var(--text);
-    margin: 0 0 4px 0;
+    margin: var(--space-2) 0 2px 0;
     max-width: 62em;
 }
 
 .grain-note {
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--muted);
-    margin: 0 0 24px 0;
+    margin: 0 0 var(--space-4) 0;
 }
 
-.figure-card {
-    background: var(--surface-raised);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 18px 22px;
-    height: 100%;
+/* --- Ruled bands, replacing the bordered/filled figure cards -----------
+A figure now sits directly on the surface: no border, no fill, no radius.
+The only structure is the hairline rule above the row (drawn by
+.band-rule, placed by section_rule() in streamlit_app.py) and the 8px gap
+between a figure's own label/value/sub-line, which is tighter than the
+32-48px gap at the next real section break. */
+.figure-block {
+    padding: 0;
 }
 
 .figure-label {
-    font-size: 12px;
+    font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif;
+    font-size: var(--text-2xs);
     font-weight: 400;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--muted);
-    margin-bottom: 6px;
+    margin-bottom: var(--space-1);
 }
 
 .figure-value {
@@ -173,17 +216,17 @@ h4::before {
     white-space: nowrap;
 }
 
-/* Primary vs. secondary is now a decisive jump (52px vs 22px), not a soft
-1.3x step -- the single most important figure on the Executive Summary
-tab, Actual vs Plan, must read as unmistakably the largest number on the
-page, title included. */
-.figure-value--primary { font-size: 52px; }
-.figure-value--secondary { font-size: 22px; font-weight: 600; }
+/* Primary vs. secondary is a decisive jump on the widened scale (48px vs
+22px), not a soft step -- the single most important figure on the
+Executive Summary tab, Actual vs Plan, must read as unmistakably the
+largest number on the page. */
+.figure-value--primary { font-size: var(--text-xl); }
+.figure-value--secondary { font-size: var(--text-md); font-weight: 600; }
 
 .figure-sub {
-    font-size: 13px;
+    font-size: var(--text-xs);
     color: var(--muted);
-    margin-top: 6px;
+    margin-top: var(--space-1);
     line-height: 1.5;
 }
 
@@ -197,19 +240,36 @@ page, title included. */
 .state-violet { color: var(--violet); }
 .state-amber { color: var(--amber); }
 
+/* A section break: a full-width hairline rule with generous space on
+either side (32/48px), used between distinct regions of a tab -- never
+between a figure and its own sub-line, which stays at 8px. */
+.band-rule {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: var(--space-4) 0;
+}
+
+.band-rule--tight {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: var(--space-3) 0;
+}
+
 .callout-row {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin: 18px 0 4px 0;
+    gap: var(--space-1);
+    margin: var(--space-2) 0 var(--space-1) 0;
 }
 
+/* Callouts stay text on the surface, ruled off from what comes after
+rather than boxed -- the same ruled-band language as everything else. */
 .callout {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface-raised);
-    padding: 12px 18px;
-    font-size: 13px;
+    border: none;
+    border-left: 2px solid var(--border);
+    background: none;
+    padding: 2px 0 2px var(--space-2);
+    font-size: var(--text-xs);
     line-height: 1.55;
     color: var(--text);
 }
@@ -221,10 +281,10 @@ page, title included. */
 }
 
 .section-caption {
-    font-size: 13px;
+    font-size: var(--text-xs);
     color: var(--muted);
-    margin-top: -6px;
-    margin-bottom: 10px;
+    margin-top: -4px;
+    margin-bottom: var(--space-1);
 }
 
 /* Tabular numerals throughout every dataframe, without recolouring it. */
@@ -233,9 +293,7 @@ page, title included. */
 }
 
 /* Filter row multiselect chips must size to their own label, never clip
-mid-word. The filter row sits inline above the tabs now, not in a sidebar,
-so this is scoped to any multiselect tag on the page rather than to a
-sidebar container that no longer exists. */
+mid-word. */
 [data-baseweb="tag"] {
     height: auto;
     max-width: 100%;
@@ -251,12 +309,8 @@ sidebar container that no longer exists. */
 
 /* Streamlit's own multiselect chip fills solid with primaryColor by
 default -- once primaryColor is the accent red, that reads as a warning
-badge on every filter selection, which is the exact defect this pass is
-fixing. A chip is a selected filter, not a semantic state, so it gets the
-chrome weight only: a light tint background, dark red text for contrast
-(9.16:1 measured on --chip-tint), and a subtle border -- never the
-saturated fill. The close ("x") icon is recoloured to match so it does
-not read as a stray, uncoloured fragment sitting on a tinted chip. */
+badge on every filter selection. A chip is a selected filter, not a
+semantic state, so it gets the chrome weight only. */
 [data-baseweb="tag"] {
     background-color: var(--chip-tint) !important;
     border: 1px solid var(--chip-border) !important;
@@ -271,29 +325,112 @@ not read as a stray, uncoloured fragment sitting on a tinted chip. */
     fill: var(--chip-text) !important;
 }
 
-/* --- Filter row: presence without hue ---------------------------------
-Three widgets used to just float above the tabs with no visual boundary,
-reading as loose chrome rather than a deliberate control strip. This adds
-a raised surface and a clear edge -- the same visual language as the
-figure cards and callouts -- with no colour, since a filter is a control,
-not a semantic state. `st.container(key="filter-row")` in
-streamlit_app.py is what gives this its `.st-key-filter-row` hook. */
+/* --- Filter strip: a ruled band, not a card ----------------------------
+Raised surface top and bottom rules only, no border-radius, no box: the
+same visual language as the instrument header below, scaled down. */
 .st-key-filter-row {
     background: var(--surface-raised);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 14px 18px 6px 18px;
-    margin-bottom: 22px;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    padding: var(--space-2) var(--space-2) var(--space-1) var(--space-2);
+    margin-bottom: var(--space-4);
 }
 
 .st-key-filter-row label p {
+    font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif;
     font-weight: 600 !important;
-    font-size: 13px !important;
+    font-size: var(--text-2xs) !important;
     color: var(--text) !important;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.05em;
 }
 
 .st-key-filter-row [data-testid="stCaptionContainer"] {
     margin-top: 2px;
+}
+
+/* -------------------------------------------------------------------
+INSTRUMENT HEADER -- the one element that stays visible above every tab.
+A raised surface, full-bleed within the page's own width, set off from
+the tabs below by a single rule rather than a card. Compact: name, source
+and backend, freshness and run status sit on one line, the balance bar on
+the next. */
+.st-key-instrument-header {
+    background: var(--surface-raised);
+    border: none;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    margin: 0 0 var(--space-3) 0;
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-2);
+}
+
+.instrument-title {
+    font-weight: 700;
+    font-size: var(--text-lg);
+    letter-spacing: -0.01em;
+    color: var(--text);
+    display: inline;
+}
+
+.instrument-meta {
+    font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif;
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin-top: 2px;
+    white-space: normal;
+}
+
+.instrument-meta .num {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+}
+
+.instrument-meta .sep {
+    margin: 0 8px;
+    color: var(--border);
+}
+
+/* -------------------------------------------------------------------
+BALANCE BAR -- the signature element. A thin, full-width proportional bar
+showing recognised + open + cancelled + quarantined = source total.
+Segment widths are set inline (per-render, from the real proportions);
+this file only fixes the bar's own chrome: height, no radius, no
+gradient, and a native title-attribute tooltip per segment for the exact
+value on hover, so nothing here becomes a hero graphic. */
+.balance-bar {
+    display: flex;
+    width: 100%;
+    height: 10px;
+    margin-top: var(--space-2);
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.balance-seg {
+    height: 100%;
+}
+
+.balance-seg--recognized { background: var(--teal); }
+.balance-seg--open { background: var(--muted); opacity: 0.55; }
+.balance-seg--cancelled { background: var(--muted); opacity: 0.3; }
+.balance-seg--quarantined { background: var(--violet); }
+
+.balance-bar-label {
+    font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif;
+    font-size: var(--text-2xs);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 6px;
+}
+
+.balance-bar-label .num {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    text-transform: none;
+    letter-spacing: normal;
 }

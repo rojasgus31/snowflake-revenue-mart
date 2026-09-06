@@ -194,6 +194,19 @@ def inject_theme():
     st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
 
 
+def section_rule(weight: str = "section"):
+    """One hairline rule, replacing Streamlit's default `st.markdown('---')`.
+
+    `weight` picks the spacing either side of the rule from the 8px scale:
+    "section" (32px) between distinct regions of a tab, "tight" (24px)
+    between two closely related blocks that still deserve a visible split.
+    Never used between a figure and its own sub-line -- that gap stays at
+    8px and carries no rule at all.
+    """
+    css_class = "band-rule" if weight == "section" else "band-rule--tight"
+    st.markdown(f'<hr class="{css_class}" />', unsafe_allow_html=True)
+
+
 RUN_RESULTS_PATH = Path(__file__).resolve().parent.parent / "transform" / "target" / "run_results.json"
 
 
@@ -281,10 +294,12 @@ def render_filter_row(data: dict[str, pd.DataFrame]):
     No hue here -- a filter chip is not a semantic state -- so this strip
     earns its presence from a raised surface, a clear boundary, heavier
     label type, and an explicit count of how many values are active, the
-    same way `.st-key-filter-row` is styled in app/theme.css.
+    same way `.st-key-filter-row` is styled in app/theme.css. The source and
+    backend used to sit in a fourth column here; it now lives in the
+    instrument header above, so this row is only the three filters.
     """
     with st.container(key="filter-row"):
-        col_region, col_family, col_months, col_source = st.columns([3, 3, 3, 1])
+        col_region, col_family, col_months = st.columns([1, 1, 1])
 
         with col_region:
             all_regions = sorted(data["mart"]["region"].unique())
@@ -312,23 +327,159 @@ def render_filter_row(data: dict[str, pd.DataFrame]):
             else:
                 month_range = (all_months[0], all_months[0]) if all_months else None
 
-        with col_source:
-            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-            st.caption(f"Source: {backend_name()}")
-
     return regions, families, month_range
 
 
 def figure_card(label: str, value_html: str, sub_html: str = "", size: str = "primary"):
-    """Render one weighted figure card. `size` controls type scale, not colour."""
+    """Render one weighted figure, sitting directly on the surface.
+
+    No border, no fill, no radius: this used to be a bordered "card" and is
+    now a plain block, grouped with its neighbours by the hairline rule
+    section_rule() draws above the row, not by a box around each one.
+    `size` controls type scale, not colour.
+    """
     st.markdown(
-        f'<div class="figure-card">'
+        f'<div class="figure-block">'
         f'<div class="figure-label">{label}</div>'
         f'<div class="figure-value figure-value--{size}">{value_html}</div>'
         f'<div class="figure-sub">{sub_html}</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
+
+
+def _reconciliation_totals(raw: dict[str, pd.DataFrame]) -> dict[str, float]:
+    """The four buckets every source dollar lands in, computed once.
+
+    Always over the whole, unfiltered dataset -- a partially-filtered
+    reconciliation would not prove anything, so every caller (the
+    instrument header, the executive summary, the data-quality tab) passes
+    the same unfiltered `data`, never `filtered`. Centralised here so the
+    three call sites can never disagree about how the total is built.
+    """
+    mart_raw = raw["mart"]
+    orders_raw = raw["orders"]
+    dq_raw = raw["dq"]
+    recognized = mart_raw["actual_revenue"].sum()
+    open_rev = orders_raw[orders_raw["order_status"] == "Open"]["gross_revenue"].sum()
+    cancelled_rev = orders_raw[orders_raw["order_status"] == "Cancelled"]["gross_revenue"].sum()
+    rejected_rev = dq_raw["rejected_revenue"].sum()
+    source_total = recognized + open_rev + cancelled_rev + rejected_rev
+    return {
+        "recognized": recognized,
+        "open": open_rev,
+        "cancelled": cancelled_rev,
+        "quarantined": rejected_rev,
+        "source_total": source_total,
+    }
+
+
+def _load_freshness():
+    """Max load timestamp across the raw layer, or None if unavailable.
+
+    Shared by the instrument header and the observability tab so both read
+    the same freshness fact; `query()` already caches the underlying call,
+    so asking twice costs nothing extra.
+    """
+    try:
+        freshness = query(
+            "select max(_loaded_at) as last_loaded_at, "
+            "arg_max(_batch_id, _loaded_at) as latest_batch_id, "
+            "count(distinct _batch_id) as batch_count from ("
+            "select _loaded_at, _batch_id from raw.raw_oracle_orders "
+            "union all "
+            "select _loaded_at, _batch_id from raw.raw_erp_products "
+            "union all "
+            "select _loaded_at, _batch_id from raw.raw_adaptive_forecast "
+            "union all "
+            "select _loaded_at, _batch_id from raw.raw_salesforce_accounts"
+            ")"
+        )
+    except DataSourceError:
+        return None
+    if freshness.empty or pd.isna(freshness.loc[0, "last_loaded_at"]):
+        return None
+    return freshness.iloc[0]
+
+
+def render_balance_bar(totals: dict[str, float]):
+    """The signature element: one thin, proportional bar, always visible.
+
+    Four segments -- recognised, open, cancelled, quarantined -- sized to
+    their share of source revenue, in the existing semantic colours
+    (recognised teal, open/cancelled neutral greys, quarantined violet).
+    Exact values sit in each segment's `title` attribute, a native
+    tooltip, so the bar itself stays a thin instrument rather than a hero
+    graphic; the compact label states the source total once, in words.
+    """
+    source_total = totals["source_total"]
+    segments = [
+        ("recognized", "Recognized (shipped)", totals["recognized"]),
+        ("open", "Open pipeline", totals["open"]),
+        ("cancelled", "Cancelled", totals["cancelled"]),
+        ("quarantined", "Quarantined (DQ)", totals["quarantined"]),
+    ]
+    bar_html = ['<div class="balance-bar">']
+    for css_key, label, value in segments:
+        pct = (value / source_total * 100) if source_total else 0
+        tooltip = f"{label}: {CURRENCY_FORMAT_PRECISE.format(value)} ({pct:.1f}%)"
+        bar_html.append(
+            f'<div class="balance-seg balance-seg--{css_key}" '
+            f'style="width:{pct:.4f}%" title="{tooltip}"></div>'
+        )
+    bar_html.append("</div>")
+    st.markdown("".join(bar_html), unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="balance-bar-label">Recognized + open + cancelled + '
+        f'quarantined = source total '
+        f'<span class="num">{CURRENCY_FORMAT_PRECISE.format(source_total)}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_instrument_header(data: dict[str, pd.DataFrame]):
+    """The persistent instrument band: name, source, freshness, run status.
+
+    Stays above the tabs on every tab (main() draws it once, before
+    st.tabs), anchoring the page the way the old floating title never did.
+    Distinct from the content below through the raised surface and a
+    rule, per PRODUCT.md's "chrome carries the accent at low saturation" --
+    not a card.
+    """
+    freshness_row = _load_freshness()
+    if freshness_row is not None:
+        last_loaded = pd.Timestamp(freshness_row["last_loaded_at"]).strftime("%Y-%m-%d %H:%M")
+        freshness_html = f'<span class="num">{last_loaded}</span>'
+    else:
+        freshness_html = NULL_MARKER
+
+    run_results = _load_dbt_run_results()
+    if run_results is not None:
+        test_results = [
+            r for r in run_results.get("results", []) if r["unique_id"].startswith("test.")
+        ]
+        tests_passed = sum(1 for r in test_results if r["status"] == "pass")
+        run_html = f'<span class="num">{tests_passed}/{len(test_results)}</span> dbt tests passing'
+    else:
+        run_html = "dbt build not yet run"
+
+    with st.container(key="instrument-header"):
+        st.markdown(
+            f'<span class="instrument-title">Revenue Performance</span>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div class="instrument-meta">'
+            f'{backend_name()}'
+            f'<span class="sep">&middot;</span>'
+            f'Last loaded {freshness_html}'
+            f'<span class="sep">&middot;</span>'
+            f'{run_html}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        totals = _reconciliation_totals(data)
+        render_balance_bar(totals)
 
 
 def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.DataFrame]):
@@ -401,13 +552,9 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
     # Reconciliation always covers the whole source dataset, ignoring the
     # filter row; a partially-filtered reconciliation would not prove
     # anything, the same rule tab_data_quality already follows.
-    dq_raw = raw["dq"]
-    orders_raw = raw["orders"]
-    recognized = mart_raw["actual_revenue"].sum()
-    open_rev = orders_raw[orders_raw["order_status"] == "Open"]["gross_revenue"].sum()
-    cancelled_rev = orders_raw[orders_raw["order_status"] == "Cancelled"]["gross_revenue"].sum()
-    rejected_rev = dq_raw["rejected_revenue"].sum()
-    source_total = recognized + open_rev + cancelled_rev + rejected_rev
+    totals = _reconciliation_totals(raw)
+    source_total = totals["source_total"]
+    rejected_rev = totals["quarantined"]
     rejected_share = rejected_rev / source_total if source_total else None
 
     with col_recon:
@@ -581,7 +728,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         fig.update_layout(margin=dict(t=90, l=90, r=30, b=90))
         st.plotly_chart(fig, width="stretch")
 
-    st.markdown("---")
+    section_rule()
     st.subheader("Actual vs Forecast by Month")
     st.caption(
         "Actual is the series worth reading: teal, solid, in the "
@@ -622,7 +769,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         "structural shortfall the lede describes, not a swing month to month."
     )
 
-    st.markdown("---")
+    section_rule()
     left, right = st.columns(2)
 
     with left:
@@ -651,6 +798,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
             ),
             width="stretch",
             hide_index=True,
+            row_height=32,
         )
 
     with right:
@@ -690,7 +838,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
             "an order to compare against plan."
         )
 
-    st.markdown("---")
+    section_rule()
     st.subheader("Variance by Product Family")
     by_family = (
         mart.groupby("product_family", as_index=False)
@@ -716,7 +864,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         "agree, so the reader never has to reconcile the two."
     )
 
-    st.markdown("---")
+    section_rule()
     left2, right2 = st.columns(2)
     with left2:
         st.markdown("**Top 5 Above Plan**")
@@ -725,7 +873,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         ]
         st.dataframe(
             top.style.format({"revenue_variance": "${:,.0f}"}, na_rep=NULL_MARKER),
-            width="stretch", hide_index=True,
+            width="stretch", hide_index=True, row_height=32,
         )
     with right2:
         st.markdown("**Top 5 Below Plan**")
@@ -734,10 +882,10 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         ]
         st.dataframe(
             bottom.style.format({"revenue_variance": "${:,.0f}"}, na_rep=NULL_MARKER),
-            width="stretch", hide_index=True,
+            width="stretch", hide_index=True, row_height=32,
         )
 
-    st.markdown("---")
+    section_rule()
     st.subheader("Detail Table")
 
     flag_filter = st.multiselect(
@@ -763,6 +911,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         ),
         width="stretch",
         hide_index=True,
+        row_height=32,
         height=400,
     )
 
@@ -854,7 +1003,7 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
                 "plus Late only, the same convention the mart uses."
             )
 
-    st.markdown("---")
+    section_rule()
     st.subheader("Promised vs Actual: Delivery Gap in Days")
     st.caption(
         "A status count says an order was late; it does not say by how much. "
@@ -914,7 +1063,7 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
             "used for revenue, applied here to a promise instead of a plan."
         )
 
-    st.markdown("---")
+    section_rule()
     st.subheader("The Rows a Status Count Alone Would Hide")
     n_cancelled = int((orders["delivery_status"] == "Cancelled").sum())
     n_unknown = int((orders["delivery_status"] == "Unknown").sum())
@@ -939,7 +1088,7 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown("---")
+    section_rule()
     st.subheader("Late Orders Detail")
     late = shipped[shipped["delivery_status"] == "Late"].copy()
 
@@ -974,6 +1123,7 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
             late_display.style.format({"Gross Revenue": "${:,.2f}"}, na_rep=NULL_MARKER),
             width="stretch",
             hide_index=True,
+            row_height=32,
             height=400,
         )
     else:
@@ -1029,7 +1179,7 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
         )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown("---")
+    section_rule()
     st.subheader("Revenue by Product Family")
     by_family = (
         mart.groupby("product_family", as_index=False)
@@ -1066,7 +1216,7 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
         "teal ramp as bar length, so magnitude reads twice."
     )
 
-    st.markdown("---")
+    section_rule()
     left, right = st.columns(2)
 
     with left:
@@ -1154,6 +1304,7 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
             product_display.style.format({"standard_cost": "${:,.2f}"}, na_rep=NULL_MARKER),
             width="stretch",
             hide_index=True,
+            row_height=32,
         )
 
 
@@ -1169,13 +1320,12 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
         "a partial reconciliation would not prove anything."
     )
 
-    recognized = mart["actual_revenue"].sum()
-
-    orders_all = data["orders"]
-    open_rev = orders_all[orders_all["order_status"] == "Open"]["gross_revenue"].sum()
-    cancelled_rev = orders_all[orders_all["order_status"] == "Cancelled"]["gross_revenue"].sum()
-    rejected_rev = dq["rejected_revenue"].sum()
-    source_total = recognized + open_rev + cancelled_rev + rejected_rev
+    totals = _reconciliation_totals(data)
+    recognized = totals["recognized"]
+    open_rev = totals["open"]
+    cancelled_rev = totals["cancelled"]
+    rejected_rev = totals["quarantined"]
+    source_total = totals["source_total"]
     rejected_share = rejected_rev / source_total if source_total else None
 
     rc1, rc2, rc3, rc4 = st.columns(4)
@@ -1227,7 +1377,7 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
         "is dropped or double-counted between raw orders and the mart."
     )
 
-    st.markdown("---")
+    section_rule()
     left, right = st.columns(2)
 
     with left:
@@ -1249,6 +1399,7 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
             ),
             width="stretch",
             hide_index=True,
+            row_height=32,
         )
 
     with right:
@@ -1281,7 +1432,7 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
                 "revenue; the rest are minor by comparison."
             )
 
-    st.markdown("---")
+    section_rule()
     st.subheader("Rejected Rows Detail")
     st.caption(
         f"Full payload of every one of the {len(rejects)} rejected rows, "
@@ -1304,9 +1455,10 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
         ),
         width="stretch",
         hide_index=True,
+        row_height=32,
     )
 
-    st.markdown("---")
+    section_rule()
     st.subheader("Pipeline Observability")
     st.caption(
         "When the data was last loaded, when the transformation pipeline "
@@ -1392,19 +1544,20 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
                     slowest_df.style.format({"Execution Time (s)": "{:.2f}"}),
                     width="stretch",
                     hide_index=True,
+                    row_height=32,
                 )
 
 
 def main():
     try:
         inject_theme()
-        st.title("Revenue Performance")
+        data = load_data()
+        render_instrument_header(data)
         st.caption(
             "Actual vs plan at product x region x month, with order-level delivery "
             "detail and full DQ reconciliation."
         )
 
-        data = load_data()
         regions, families, months = render_filter_row(data)
         filtered = apply_filters(data, regions, families, months)
 
