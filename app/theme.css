@@ -1,12 +1,15 @@
 /* Revenue Performance dashboard theme.
 
-Colour is reserved for two axes: variance (red below plan, teal above
-plan) and data quality (violet, quarantine only). Every other element in
-this file stays neutral -- tabs, chips, sliders and structural chrome carry
-no hue. Streamlit's own theme tokens (.streamlit/config.toml) set the
-neutral surface/text/border/font values that this stylesheet builds on;
-this file only adds the layout pieces Streamlit's theming API cannot reach
-(the lede sentence, the weighted figure cards, the reconciliation callouts).
+Colour is reserved for three axes: variance (red below plan, teal above
+plan), data quality (violet, quarantine only), and now amber for a state
+that is genuinely pending or in flight, never a judged outcome. Every
+other element in this file stays neutral -- tabs, chips, sliders and
+structural chrome carry no hue. Streamlit's own theme tokens
+(.streamlit/config.toml) set the neutral surface/text/border/font values
+that this stylesheet builds on; this file only adds the layout pieces
+Streamlit's theming API cannot reach (the lede sentence, the weighted
+figure cards, the reconciliation callouts, the filter strip, and the
+type-scale amplification below).
 
 Source colours, in oklch (perceptually uniform, so lightness and chroma
 are chosen independently of hue), darkened relative to their old dark-mode
@@ -16,12 +19,15 @@ Streamlit's config need:
   --red:    oklch(0.52 0.20 27)  -> #C2181D  (5.76:1 on surface)
   --teal:   oklch(0.50 0.10 195) -> #007475  (5.28:1 on surface)
   --violet: oklch(0.50 0.13 305) -> #754D9E  (5.99:1 on surface)
+  --amber:  #B45309 (measured 4.74:1 on surface, warm family, not a bright
+            or neon orange)
 A single red now covers both text and fills; on a light surface one value
 clears 4.5:1 for both, unlike the dark theme, which needed a lighter
 "text" variant alongside the deeper "fill" one.
 */
 
 :root {
+    --surface: #FAF8F6;
     --surface-raised: #F3EFED;
     --border: #DAD7D3;
     --muted: #6C6864;
@@ -29,21 +35,59 @@ clears 4.5:1 for both, unlike the dark theme, which needed a lighter
     --red: #C2181D;
     --teal: #007475;
     --violet: #754D9E;
+    --amber: #B45309;
+}
+
+/* --- Type scale, amplified ------------------------------------------
+Before: title ~2.25rem/700, subheads ~1.5rem, figure primary 37px/600,
+figure secondary 28px/600, body ~16px -- a flat, roughly 1.25x ramp with
+little to tell the reader what to look at first.
+After: decisive jumps instead of a uniform ramp, and weight now carries
+as much of the contrast as size does -- figures are heavy, their labels
+are light, so the eye lands on the number first every time. */
+
+h1 {
+    font-weight: 700 !important;
+    font-size: 2.75rem !important;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.15em !important;
+}
+
+h2 {
+    font-weight: 600 !important;
+    font-size: 1.6rem !important;
+}
+
+/* st.subheader */
+h3 {
+    font-weight: 600 !important;
+    font-size: 1.2rem !important;
+    margin-top: 1.6em !important;
+    margin-bottom: 0.3em !important;
+}
+
+/* Markdown "####" section titles, e.g. "Variance by Region" */
+h4 {
+    font-weight: 600 !important;
+    font-size: 1.02rem !important;
+    letter-spacing: 0.01em;
+    margin-top: 1.4em !important;
+    margin-bottom: 0.4em !important;
 }
 
 .lede {
-    font-size: 21px;
-    line-height: 1.55;
+    font-size: 22px;
+    line-height: 1.5;
     font-weight: 500;
     color: var(--text);
-    margin: 0 0 6px 0;
+    margin: 0 0 4px 0;
     max-width: 62em;
 }
 
 .grain-note {
     font-size: 12px;
     color: var(--muted);
-    margin: 0 0 28px 0;
+    margin: 0 0 24px 0;
 }
 
 .figure-card {
@@ -56,28 +100,32 @@ clears 4.5:1 for both, unlike the dark theme, which needed a lighter
 
 .figure-label {
     font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.03em;
+    font-weight: 400;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--muted);
-    margin-bottom: 10px;
+    margin-bottom: 6px;
 }
 
 .figure-value {
     font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-numeric: tabular-nums;
-    font-weight: 600;
-    line-height: 1.1;
+    font-weight: 700;
+    line-height: 1.05;
     white-space: nowrap;
 }
 
-.figure-value--primary { font-size: 37px; }
-.figure-value--secondary { font-size: 28px; }
+/* Primary vs. secondary is now a decisive jump (52px vs 22px), not a soft
+1.3x step -- the single most important figure on the Executive Summary
+tab, Actual vs Plan, must read as unmistakably the largest number on the
+page, title included. */
+.figure-value--primary { font-size: 52px; }
+.figure-value--secondary { font-size: 22px; font-weight: 600; }
 
 .figure-sub {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--muted);
-    margin-top: 8px;
+    margin-top: 6px;
     line-height: 1.5;
 }
 
@@ -89,6 +137,7 @@ clears 4.5:1 for both, unlike the dark theme, which needed a lighter
 .state-red { color: var(--red); }
 .state-teal { color: var(--teal); }
 .state-violet { color: var(--violet); }
+.state-amber { color: var(--amber); }
 
 .callout-row {
     display: flex;
@@ -140,4 +189,31 @@ sidebar container that no longer exists. */
     overflow: visible;
     text-overflow: unset;
     word-break: break-word;
+}
+
+/* --- Filter row: presence without hue ---------------------------------
+Three widgets used to just float above the tabs with no visual boundary,
+reading as loose chrome rather than a deliberate control strip. This adds
+a raised surface and a clear edge -- the same visual language as the
+figure cards and callouts -- with no colour, since a filter is a control,
+not a semantic state. `st.container(key="filter-row")` in
+streamlit_app.py is what gives this its `.st-key-filter-row` hook. */
+.st-key-filter-row {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 18px 6px 18px;
+    margin-bottom: 22px;
+}
+
+.st-key-filter-row label p {
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    color: var(--text) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.st-key-filter-row [data-testid="stCaptionContainer"] {
+    margin-top: 2px;
 }

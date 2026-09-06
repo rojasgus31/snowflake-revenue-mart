@@ -10,16 +10,17 @@ Snowflake connector, or the committed DuckDB file; no code changes needed
 per backend.
 
 Colour system: one diverging axis for variance (red below plan, teal
-above plan) and one separate hue for data quality (violet, quarantine
-only), all darkened to clear 4.5:1 on the warm off-white surface. A bar
-fill is never the text colour -- text is for text -- so purely structural
-categories (delivery states with no judgement attached, like "Not
-Delivered" or "Cancelled") use a grey ramp instead. Structural chrome
-(tabs, filter chips, sliders, focus rings) carries no hue at all; that
-neutrality comes from .streamlit/config.toml's theme tokens. app/theme.css
-adds the handful of layout pieces (the lede sentence, the weighted figure
-cards, the reconciliation callouts) that Streamlit's theming API cannot
-reach on its own.
+above plan), one separate hue for data quality (violet, quarantine only),
+and one warm amber reserved for states that are genuinely pending or
+in-flight rather than judged good or bad, all darkened to clear 4.5:1 on
+the warm off-white surface. A bar fill is never the text colour -- text is
+for text -- so a truly excluded, no-judgement category (an order that was
+Cancelled, and so is deliberately excluded from revenue) stays grey
+instead. Structural chrome (tabs, filter chips, sliders, focus rings)
+carries no hue at all; that neutrality comes from .streamlit/config.toml's
+theme tokens. app/theme.css adds the handful of layout pieces (the lede
+sentence, the weighted figure cards, the reconciliation callouts, the
+filter strip) that Streamlit's theming API cannot reach on its own.
 """
 
 from __future__ import annotations
@@ -44,11 +45,12 @@ NULL_MARKER = "unknown"
 # Kept in one place, and only here, so every chart, card and table in this
 # app agrees on what each hue means: red is the below-plan end of the
 # variance axis, teal is the above-plan end, violet is data quality and
-# never variance, and everything else stays neutral. Values match the
-# oklch() colours in app/theme.css and .streamlit/config.toml; see the
-# module docstring there for the conversion. On a light surface, one red
-# clears 4.5:1 for both text and fills (oklch 0.52 0.20 27), so there is no
-# need for the separate lighter "text" variant the dark theme required.
+# never variance, amber is a state still in flight and not yet judged, and
+# everything else stays neutral. Values match the oklch() colours in
+# app/theme.css and .streamlit/config.toml; see the module docstring there
+# for the conversion. On a light surface, one red clears 4.5:1 for both
+# text and fills (oklch 0.52 0.20 27), so there is no need for the separate
+# lighter "text" variant the dark theme required.
 COLOR_SURFACE = "#FAF8F6"
 COLOR_SURFACE_RAISED = "#F3EFED"
 COLOR_BORDER = "#DAD7D3"
@@ -57,24 +59,40 @@ COLOR_MUTED = "#6C6864"
 COLOR_RED = "#C2181D"
 COLOR_TEAL = "#007475"
 COLOR_VIOLET = "#754D9E"
+# Warm amber, the one hue added in this pass, reserved for a state that is
+# genuinely pending -- in flight, not yet judged good or bad -- never for a
+# structural exclusion like Cancelled. Sits in the same warm family as
+# COLOR_RED rather than a cool or neon orange, and clears 4.5:1 as text
+# weight against COLOR_SURFACE (measured 4.74:1).
+COLOR_AMBER = "#B45309"
 
-# Two grey steps for genuinely neutral fills -- categories that carry no
-# judgement and are not variance, not data quality, just a structural state
-# (an order not yet delivered, a cancelled order excluded from revenue).
-# Never the text colour: #8A8580 is the darkest either one goes, clearly
-# lighter than COLOR_TEXT/COLOR_MUTED, so a bar never reads as near-black.
-COLOR_GREY_MID = "#8A8580"    # pending / in-progress, no judgement
-COLOR_GREY_LIGHT = "#BBB6B3"  # excluded / structurally absent, no judgement
+# One grey step for genuinely neutral fills -- a category that carries no
+# judgement, is not variance, not data quality, not in flight, just
+# structurally excluded (a cancelled order, out of revenue scope by
+# design). Never the text colour: lighter than COLOR_TEXT/COLOR_MUTED, so a
+# bar never reads as near-black.
+COLOR_GREY_MID = "#8A8580"    # structurally excluded, no judgement
 
 FONT_SANS = "'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif"
 FONT_MONO = "'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace"
 
 # The one diverging colourscale used for the remaining continuous variance
-# visual (the product-family bar). Zero-anchored: red at the low end, a
-# neutral midpoint at zero, teal at the high end.
+# visual (the product-family variance bar). Zero-anchored: red at the low
+# end, a neutral midpoint at zero, teal at the high end.
 VARIANCE_COLORSCALE = [
     [0.0, COLOR_RED],
     [0.5, COLOR_SURFACE_RAISED],
+    [1.0, COLOR_TEAL],
+]
+
+# A single-hue sequential ramp, teal only, for charts where one measure
+# (here, revenue) varies across many categories with no below/above-plan
+# reading to make -- magnitude should read from colour as well as bar
+# length, not just length alone. Not a diverging scale: there is no
+# meaningful zero or midpoint for a revenue total, so it runs light to
+# full teal rather than red-to-teal.
+REVENUE_SEQUENTIAL_COLORSCALE = [
+    [0.0, COLOR_SURFACE_RAISED],
     [1.0, COLOR_TEAL],
 ]
 
@@ -91,6 +109,33 @@ FLAG_COLORS = {
     "NO_FORECAST": COLOR_VIOLET,
 }
 FLAG_ORDER = ["NO_ACTUALS", "BELOW_PLAN", "AT_OR_ABOVE_PLAN", "NO_FORECAST"]
+
+# Collapsing rule for the product x region heatmap: a cell spans up to six
+# months, and this is the order in which those months' flags outrank one
+# another when picked down to a single cell colour. AT_OR_ABOVE_PLAN has
+# only 11 rows out of 289, so the statistical mode of six months almost
+# never lands on it -- the good news is structurally invisible under a
+# most-common-flag rule. Ranking it first instead means a cell that ever
+# beat plan in any of its months shows as having beaten plan, full stop.
+# NO_FORECAST is the next rarest and is a planning-side data-quality gap,
+# so it outranks the routine BELOW_PLAN reading, which in turn outranks
+# NO_ACTUALS, the dominant but least informative flag (an absence of
+# orders, not a result).
+CELL_PRIORITY = ["AT_OR_ABOVE_PLAN", "NO_FORECAST", "BELOW_PLAN", "NO_ACTUALS"]
+
+
+def _collapse_cell_flag(month_flags: pd.Series) -> str:
+    """Pick one flag to represent a heatmap cell's up-to-six months.
+
+    Highest-priority flag present wins (see CELL_PRIORITY), not the most
+    frequent one -- the whole point of Defect 1's fix is that a single
+    month above plan must never be buried by five months with no orders.
+    """
+    present = set(month_flags)
+    for flag in CELL_PRIORITY:
+        if flag in present:
+            return flag
+    return month_flags.value_counts().idxmax()
 
 
 def _style_plot(fig: go.Figure) -> go.Figure:
@@ -228,32 +273,43 @@ def render_filter_row(data: dict[str, pd.DataFrame]):
 
     A plain horizontal row, not an expander or a modal: the filters apply to
     every tab exactly as before, they are just no longer hidden in a drawer.
+    No hue here -- a filter chip is not a semantic state -- so this strip
+    earns its presence from a raised surface, a clear boundary, heavier
+    label type, and an explicit count of how many values are active, the
+    same way `.st-key-filter-row` is styled in app/theme.css.
     """
-    col_region, col_family, col_months, col_source = st.columns([3, 3, 3, 1])
+    with st.container(key="filter-row"):
+        col_region, col_family, col_months, col_source = st.columns([3, 3, 3, 1])
 
-    with col_region:
-        all_regions = sorted(data["mart"]["region"].unique())
-        regions = st.multiselect("Region", all_regions, default=all_regions)
+        with col_region:
+            all_regions = sorted(data["mart"]["region"].unique())
+            regions = st.multiselect("Region", all_regions, default=all_regions)
+            st.caption(f"{len(regions)} of {len(all_regions)} active")
 
-    with col_family:
-        all_families = sorted(data["products"]["product_family"].unique())
-        families = st.multiselect("Product Family", all_families, default=all_families)
+        with col_family:
+            all_families = sorted(data["products"]["product_family"].unique())
+            families = st.multiselect("Product Family", all_families, default=all_families)
+            st.caption(f"{len(families)} of {len(all_families)} active")
 
-    with col_months:
-        all_months = sorted(pd.to_datetime(data["mart"]["revenue_month"]).unique())
-        if len(all_months) >= 2:
-            month_range = st.select_slider(
-                "Month Range",
-                options=all_months,
-                value=(all_months[0], all_months[-1]),
-                format_func=lambda x: pd.Timestamp(x).strftime("%b %Y"),
-            )
-        else:
-            month_range = (all_months[0], all_months[0]) if all_months else None
+        with col_months:
+            all_months = sorted(pd.to_datetime(data["mart"]["revenue_month"]).unique())
+            if len(all_months) >= 2:
+                month_range = st.select_slider(
+                    "Month Range",
+                    options=all_months,
+                    value=(all_months[0], all_months[-1]),
+                    format_func=lambda x: pd.Timestamp(x).strftime("%b %Y"),
+                )
+                n_months_active = sum(
+                    1 for m in all_months if month_range[0] <= m <= month_range[1]
+                )
+                st.caption(f"{n_months_active} of {len(all_months)} months active")
+            else:
+                month_range = (all_months[0], all_months[0]) if all_months else None
 
-    with col_source:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        st.caption(f"Source: {backend_name()}")
+        with col_source:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            st.caption(f"Source: {backend_name()}")
 
     return regions, families, month_range
 
@@ -432,23 +488,41 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
     no_actuals_n = int(flag_counts.get("NO_ACTUALS", 0))
     st.caption(
         f"{no_actuals_n} of {total_rows} product-region-months in view received no "
-        "orders at all (NO_ACTUALS), which is the dominant fact here, not a "
-        "variance percentage. Actual revenue sits near -84% of plan almost "
-        "everywhere, so a continuous colour scale renders nearly every cell the "
-        "same red and hides that. Each cell below is instead coloured by its "
-        "categorical variance_flag; a cell spans up to six months per product x "
-        "region, and shows the most common flag across them."
+        "orders at all (NO_ACTUALS), which is common but not the most notable "
+        "thing that can happen in a cell. A cell spans up to six months per "
+        "product x region and shows the single most notable outcome any month "
+        "in it achieved: beating plan outranks a forecasting gap, which "
+        "outranks missing plan, which outranks no orders at all, so one good "
+        "month is never buried by five quiet ones. Hover a cell for its "
+        "month-by-month composition."
     )
 
     flag_pivot = (
         mart.groupby(["product_id", "region"])["variance_flag"]
-        .agg(lambda s: s.value_counts().idxmax())
+        .agg(_collapse_cell_flag)
         .unstack("region")
         .sort_index()
     )
     flag_pivot = flag_pivot[sorted(flag_pivot.columns)]
 
     if not flag_pivot.empty:
+        # Month-by-month composition per cell, for the hover text: e.g.
+        # "Jan 2024: BELOW_PLAN; Mar 2024: AT_OR_ABOVE_PLAN". Built once
+        # here from the same grouping the pivot uses, so hover and cell
+        # colour can never disagree about what a cell contains.
+        def _composition(rows: pd.DataFrame) -> str:
+            ordered = rows.sort_values("revenue_month")
+            months = pd.to_datetime(ordered["revenue_month"]).dt.strftime("%b %Y")
+            return "; ".join(f"{m}: {f}" for m, f in zip(months, ordered["variance_flag"]))
+
+        composition_pivot = (
+            mart.groupby(["product_id", "region"])[["revenue_month", "variance_flag"]]
+            .apply(_composition)
+            .unstack("region")
+            .reindex(index=flag_pivot.index, columns=flag_pivot.columns)
+            .fillna("")
+        )
+
         code_map = {flag: i for i, flag in enumerate(FLAG_ORDER)}
         n_flags = len(FLAG_ORDER)
         z = flag_pivot.map(code_map.get).astype(float) + 0.5
@@ -465,7 +539,11 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
                 x=[str(c) for c in flag_pivot.columns],
                 y=[str(i) for i in flag_pivot.index],
                 text=text.values,
-                hovertemplate="Product %{y}<br>Region %{x}<br>Status: %{text}<extra></extra>",
+                customdata=composition_pivot.values,
+                hovertemplate=(
+                    "Product %{y}<br>Region %{x}<br>Shown: %{text}"
+                    "<br>Months: %{customdata}<extra></extra>"
+                ),
                 colorscale=discrete_colorscale,
                 zmin=0,
                 zmax=n_flags,
@@ -501,8 +579,10 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
     st.markdown("---")
     st.subheader("Actual vs Forecast by Month")
     st.caption(
-        "Two neutral series, not a variance encoding on their own: the "
-        "variance they imply is shown separately, above and below."
+        "Actual is the series worth reading: teal, solid, in the "
+        "foreground. Forecast is drawn as a neutral outline behind it, not "
+        "a second solid colour competing for attention. The variance the "
+        "two imply is shown separately, above and below."
     )
     monthly = (
         mart.groupby("revenue_month", as_index=False)[["actual_revenue", "forecast_revenue"]]
@@ -514,14 +594,16 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
     fig_monthly = go.Figure()
     fig_monthly.add_trace(go.Bar(
         x=monthly["revenue_month"], y=monthly["actual_revenue"],
-        name="Actual", marker_color=COLOR_GREY_MID,
+        name="Actual", marker_color=COLOR_TEAL,
         text=[CURRENCY_FORMAT.format(v) for v in monthly["actual_revenue"]],
         textposition="outside",
     ))
     fig_monthly.add_trace(go.Bar(
         x=monthly["revenue_month"], y=monthly["forecast_revenue"],
-        name="Forecast", marker_color=COLOR_MUTED,
+        name="Forecast", marker_color=COLOR_SURFACE,
+        marker_line=dict(color=COLOR_MUTED, width=1.5),
         marker_pattern_shape="/",
+        marker_pattern_fgcolor=COLOR_MUTED,
         text=[CURRENCY_FORMAT.format(v) for v in monthly["forecast_revenue"]],
         textposition="outside",
     ))
@@ -691,15 +773,17 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
 
     # Delivery status carries real meaning, not a neutral operational label:
     # On Time/Late sit on the same good/bad axis as revenue variance, Not
-    # Delivered and Cancelled are structurally absent outcomes with no
-    # judgement attached (so they take a grey, never the text colour), and
-    # Unknown exists only because of a data defect (D8: one row is delivered
-    # before it was ordered), so it takes the data-quality hue.
+    # Delivered is genuinely pending -- in flight, not yet judged -- so it
+    # takes amber rather than a grey that would flatten it into Cancelled.
+    # Cancelled is a structural exclusion from revenue by design, so it
+    # keeps the one neutral grey. Unknown exists only because of a data
+    # defect (D8: one row is delivered before it was ordered), so it takes
+    # the data-quality hue.
     status_shades = {
         "On Time": COLOR_TEAL,
         "Late": COLOR_RED,
-        "Not Delivered": COLOR_GREY_MID,
-        "Cancelled": COLOR_GREY_LIGHT,
+        "Not Delivered": COLOR_AMBER,
+        "Cancelled": COLOR_GREY_MID,
         "Unknown": COLOR_VIOLET,
     }
 
@@ -731,10 +815,11 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
         st.plotly_chart(fig, width="stretch")
         st.caption(
             "Late is the largest single status, ahead of On Time; only a "
-            "third of shipped orders arrived on schedule. Not Delivered and "
-            "Cancelled carry no dates to judge, and Unknown is a single "
-            "data-defect row explained below, so none of the three are "
-            "scored against the plan."
+            "third of shipped orders arrived on schedule. Not Delivered is "
+            "amber because it is still in flight, not yet a judged outcome; "
+            "Cancelled is grey because it is excluded from revenue by "
+            "design; Unknown is a single data-defect row explained below. "
+            "None of the three are scored against the plan."
         )
 
     with right:
@@ -952,7 +1037,11 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
             x=by_family_sorted["actual_revenue"],
             y=by_family_sorted["product_family"],
             orientation="h",
-            marker_color=COLOR_TEAL,
+            marker=dict(
+                color=by_family_sorted["actual_revenue"],
+                colorscale=REVENUE_SEQUENTIAL_COLORSCALE,
+                showscale=False,
+            ),
             text=[CURRENCY_FORMAT.format(v) for v in by_family_sorted["actual_revenue"]],
             textposition="outside",
         )
@@ -968,7 +1057,8 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
     st.plotly_chart(fig, width="stretch")
     st.caption(
         "Revenue concentrates in the top one or two families; the rest "
-        "trail well behind."
+        "trail well behind. Fill deepens with revenue, on the same one-hue "
+        "teal ramp as bar length, so magnitude reads twice."
     )
 
     st.markdown("---")
@@ -1101,14 +1191,15 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
 
     # One bar per bucket, coloured by what the bucket means rather than by
     # whether the waterfall step reads as an increase: recognised revenue is
-    # the good outcome (teal), open pipeline and cancelled orders are
-    # structurally neutral (grey, no judgement), and rejected is the
+    # the good outcome (teal), open pipeline is genuinely in flight and not
+    # yet judged (amber), cancelled orders are structurally excluded from
+    # revenue by design (grey, no judgement), and rejected is the
     # data-quality bucket (violet). The source total is stated as the
     # metric above rather than repeated as a fifth bar, since a total is not
     # itself a bucket.
     recon_labels = ["Recognized", "Open Pipeline", "Cancelled", "Rejected (DQ)"]
     recon_values = [recognized, open_rev, cancelled_rev, rejected_rev]
-    recon_colors = [COLOR_TEAL, COLOR_GREY_MID, COLOR_GREY_LIGHT, COLOR_VIOLET]
+    recon_colors = [COLOR_TEAL, COLOR_AMBER, COLOR_GREY_MID, COLOR_VIOLET]
     fig = go.Figure(
         go.Bar(
             x=recon_labels,
