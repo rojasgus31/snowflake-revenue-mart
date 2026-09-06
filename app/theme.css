@@ -9,26 +9,26 @@ this file only adds the layout pieces Streamlit's theming API cannot reach
 (the lede sentence, the weighted figure cards, the reconciliation callouts).
 
 Source colours, in oklch (perceptually uniform, so lightness and chroma
-are chosen independently of hue). Hex below is the sRGB conversion, since
-that is what CSS custom properties and Streamlit's config need:
-  --red-fill:  oklch(0.60 0.20 27)  -> #DE3C37  (large fills: bar segments)
-  --red-text:  oklch(0.68 0.18 27)  -> #F36358  (text, numerals, 1px strokes)
-  --teal:      oklch(0.74 0.10 195) -> #50BFBE  (unchanged)
-  --violet:    oklch(0.68 0.11 305) -> #A886CF  (unchanged)
-The two variance poles differ in lightness as well as hue (relative
-luminance 0.19 for the red fill vs 0.42 for teal, a 0.23 gap) so the scale
-still reads correctly converted to greyscale.
+are chosen independently of hue), darkened relative to their old dark-mode
+values so each clears 4.5:1 against the warm off-white surface. Hex below
+is the sRGB conversion, since that is what CSS custom properties and
+Streamlit's config need:
+  --red:    oklch(0.52 0.20 27)  -> #C2181D  (5.76:1 on surface)
+  --teal:   oklch(0.50 0.10 195) -> #007475  (5.28:1 on surface)
+  --violet: oklch(0.50 0.13 305) -> #754D9E  (5.99:1 on surface)
+A single red now covers both text and fills; on a light surface one value
+clears 4.5:1 for both, unlike the dark theme, which needed a lighter
+"text" variant alongside the deeper "fill" one.
 */
 
 :root {
-    --surface-raised: #1B1815;
-    --border: #312D2A;
-    --muted: #8A8581;
-    --text: #EBE7E4;
-    --red-fill: #DE3C37;
-    --red-text: #F36358;
-    --teal: #50BFBE;
-    --violet: #A886CF;
+    --surface-raised: #F3EFED;
+    --border: #DAD7D3;
+    --muted: #6C6864;
+    --text: #24211E;
+    --red: #C2181D;
+    --teal: #007475;
+    --violet: #754D9E;
 }
 
 .lede {
@@ -86,7 +86,7 @@ still reads correctly converted to greyscale.
     font-variant-numeric: tabular-nums;
 }
 
-.state-red { color: var(--red-text); }
+.state-red { color: var(--red); }
 .state-teal { color: var(--teal); }
 .state-violet { color: var(--violet); }
 
@@ -123,4 +123,25 @@ still reads correctly converted to greyscale.
 /* Tabular numerals throughout every dataframe, without recolouring it. */
 [data-testid="stDataFrame"] * {
     font-variant-numeric: tabular-nums;
+}
+
+/* Sidebar filter chips (multiselect) must size to their own label, never
+clip mid-word. A wider sidebar gives long values like "Unknown" room, and
+letting the chip wrap and grow means even a value that still does not fit
+one line is read in full rather than cut off. */
+[data-testid="stSidebar"] {
+    min-width: 340px;
+}
+
+[data-testid="stSidebar"] [data-baseweb="tag"] {
+    height: auto;
+    max-width: 100%;
+    white-space: normal;
+}
+
+[data-testid="stSidebar"] [data-baseweb="tag"] span {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    word-break: break-word;
 }

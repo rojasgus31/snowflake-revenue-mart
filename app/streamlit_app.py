@@ -10,9 +10,10 @@ per backend.
 
 Colour system: one diverging axis for variance (red below plan, teal
 above plan) and one separate hue for data quality (violet, quarantine
-only). Structural chrome (tabs, filter chips, sliders, focus rings)
-carries no hue at all; that neutrality comes from .streamlit/config.toml's
-theme tokens. app/theme.css adds the handful of layout pieces (the lede
+only), all darkened to clear 4.5:1 on the warm off-white surface.
+Structural chrome (tabs, filter chips, sliders, focus rings) carries no
+hue at all; that neutrality comes from .streamlit/config.toml's theme
+tokens. app/theme.css adds the handful of layout pieces (the lede
 sentence, the weighted figure cards, the reconciliation callouts) that
 Streamlit's theming API cannot reach on its own.
 """
@@ -40,56 +41,73 @@ NULL_MARKER = "unknown"
 # variance axis, teal is the above-plan end, violet is data quality and
 # never variance, and everything else stays neutral. Values match the
 # oklch() colours in app/theme.css and .streamlit/config.toml; see the
-# module docstrings there for the conversion. Two reds exist because a
-# single red cannot satisfy both uses: COLOR_RED_FILL (oklch 0.60 0.20 27)
-# is for large fills such as bar segments, COLOR_RED_TEXT (oklch 0.68 0.18
-# 27) is lighter so text, numerals and 1px strokes clear 4.5:1 contrast
-# against the dark surface.
-COLOR_SURFACE = "#100D0A"
-COLOR_SURFACE_RAISED = "#1B1815"
-COLOR_BORDER = "#312D2A"
-COLOR_TEXT = "#EBE7E4"
-COLOR_MUTED = "#8A8581"
-COLOR_RED_FILL = "#DE3C37"
-COLOR_RED_TEXT = "#F36358"
-COLOR_TEAL = "#50BFBE"
-COLOR_VIOLET = "#A886CF"
+# module docstring there for the conversion. On a light surface, one red
+# clears 4.5:1 for both text and fills (oklch 0.52 0.20 27), so there is no
+# need for the separate lighter "text" variant the dark theme required.
+COLOR_SURFACE = "#FAF8F6"
+COLOR_SURFACE_RAISED = "#F3EFED"
+COLOR_BORDER = "#DAD7D3"
+COLOR_TEXT = "#24211E"
+COLOR_MUTED = "#6C6864"
+COLOR_RED = "#C2181D"
+COLOR_TEAL = "#007475"
+COLOR_VIOLET = "#754D9E"
+
+# A five-step neutral fill ramp, darkest to faintest, for chart series that
+# are neither variance nor data-quality states (delivery status, lifecycle
+# status). These are structural, not semantic, so they stay in the same
+# warm-neutral hue family as the surface rather than borrowing red/teal/
+# violet; ordered so the most common/important slice is darkest and least
+# important recedes toward the surface, same direction the surface itself
+# now points (light, not dark).
+COLOR_NEUTRAL_1 = COLOR_TEXT
+COLOR_NEUTRAL_2 = "#4A4744"
+COLOR_NEUTRAL_3 = COLOR_MUTED
+COLOR_NEUTRAL_4 = "#BBB6B3"
+COLOR_NEUTRAL_5 = COLOR_BORDER
 
 FONT_SANS = "'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif"
 FONT_MONO = "'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace"
 
-# The one diverging colourscale used for every variance visual (heatmap,
-# family bar). Zero-anchored: red at the low end, a neutral midpoint at
-# zero, teal at the high end.
+# The one diverging colourscale used for the remaining continuous variance
+# visual (the product-family bar). Zero-anchored: red at the low end, a
+# neutral midpoint at zero, teal at the high end.
 VARIANCE_COLORSCALE = [
-    [0.0, COLOR_RED_FILL],
+    [0.0, COLOR_RED],
     [0.5, COLOR_SURFACE_RAISED],
     [1.0, COLOR_TEAL],
 ]
 
 # Variance-flag colours: BELOW_PLAN / AT_OR_ABOVE_PLAN sit on the variance
-# axis (red / teal). NO_ACTUALS and NO_FORECAST are grain gaps, not a
-# variance direction, so they stay neutral rather than borrowing either hue.
+# axis (red / teal). NO_ACTUALS is the dominant grain gap (187 of 289
+# product-region-months) and stays neutral grey -- it is not a variance
+# direction. NO_FORECAST is rare (2 rows) and is a data-quality gap in the
+# planning side rather than a variance reading, so it takes the violet
+# reserved elsewhere for data quality, not either variance pole.
 FLAG_COLORS = {
-    "BELOW_PLAN": COLOR_RED_FILL,
-    "AT_OR_ABOVE_PLAN": COLOR_TEAL,
     "NO_ACTUALS": COLOR_MUTED,
-    "NO_FORECAST": COLOR_BORDER,
+    "BELOW_PLAN": COLOR_RED,
+    "AT_OR_ABOVE_PLAN": COLOR_TEAL,
+    "NO_FORECAST": COLOR_VIOLET,
 }
+FLAG_ORDER = ["NO_ACTUALS", "BELOW_PLAN", "AT_OR_ABOVE_PLAN", "NO_FORECAST"]
 
 
 def _style_plot(fig: go.Figure) -> go.Figure:
     """Apply the one neutral chrome style every chart in this app shares.
 
-    Centralised so no chart accidentally keeps Plotly's default light
-    background, gridlines or font: DRY per the "chrome gets no hue" rule.
+    Centralised so no chart accidentally keeps Plotly's default dark
+    template, gridlines or font: DRY per the "chrome gets no hue" rule.
+    Generous margins here are the baseline every chart gets; a few charts
+    with long tick labels widen one side further below.
     """
     fig.update_layout(
+        template="plotly_white",
         paper_bgcolor=COLOR_SURFACE,
         plot_bgcolor=COLOR_SURFACE,
         font=dict(family=FONT_SANS, color=COLOR_TEXT, size=13),
         legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color=COLOR_TEXT)),
-        margin=dict(t=30, l=10, r=10, b=10),
+        margin=dict(t=40, l=60, r=30, b=60),
     )
     fig.update_xaxes(
         gridcolor=COLOR_BORDER, zerolinecolor=COLOR_BORDER, linecolor=COLOR_BORDER,
@@ -329,7 +347,7 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
         .sort_values("revenue_variance")
     )
     if not by_region.empty:
-        bar_colors = [COLOR_RED_FILL if v < 0 else COLOR_TEAL for v in by_region["revenue_variance"]]
+        bar_colors = [COLOR_RED if v < 0 else COLOR_TEAL for v in by_region["revenue_variance"]]
         fig = go.Figure(
             go.Bar(
                 x=by_region["revenue_variance"],
@@ -341,40 +359,91 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
             )
         )
         fig.update_layout(
-            height=90 + 60 * len(by_region),
+            height=min(90 + 60 * len(by_region), 480),
             xaxis_title="Variance ($, zero-anchored)",
-            yaxis_title="",
+            yaxis_title="Region",
             showlegend=False,
         )
         fig.add_vline(x=0, line_color=COLOR_BORDER, line_width=1)
-        st.plotly_chart(_style_plot(fig), width="stretch")
+        fig = _style_plot(fig)
+        fig.update_layout(margin=dict(t=40, l=90, r=30, b=60))
+        st.plotly_chart(fig, width="stretch")
 
 
 def tab_revenue_variance(data: dict[str, pd.DataFrame]):
     mart = data["mart"]
 
-    st.subheader("Product x Region Variance Heatmap")
+    st.subheader("Product x Region Variance Status")
+    total_rows = len(mart)
+    flag_counts = mart["variance_flag"].value_counts()
+    no_actuals_n = int(flag_counts.get("NO_ACTUALS", 0))
     st.caption(
-        "Colour intensity is the variance percentage: red below plan, teal "
-        "above plan, zero-anchored at the neutral midpoint."
+        f"{no_actuals_n} of {total_rows} product-region-months in view received no "
+        "orders at all (NO_ACTUALS), which is the dominant fact here, not a "
+        "variance percentage. Actual revenue sits near -84% of plan almost "
+        "everywhere, so a continuous colour scale renders nearly every cell the "
+        "same red and hides that. Each cell below is instead coloured by its "
+        "categorical variance_flag; a cell spans up to six months per product x "
+        "region, and shows the most common flag across them."
     )
 
-    pivot = mart.pivot_table(
-        index="product_id",
-        columns="region",
-        values="revenue_variance_pct",
-        aggfunc="mean",
+    flag_pivot = (
+        mart.groupby(["product_id", "region"])["variance_flag"]
+        .agg(lambda s: s.value_counts().idxmax())
+        .unstack("region")
+        .sort_index()
     )
-    if not pivot.empty:
-        fig = px.imshow(
-            pivot,
-            color_continuous_scale=VARIANCE_COLORSCALE,
-            color_continuous_midpoint=0,
-            labels=dict(color="Variance %"),
-            aspect="auto",
+    flag_pivot = flag_pivot[sorted(flag_pivot.columns)]
+
+    if not flag_pivot.empty:
+        code_map = {flag: i for i, flag in enumerate(FLAG_ORDER)}
+        n_flags = len(FLAG_ORDER)
+        z = flag_pivot.map(code_map.get).astype(float) + 0.5
+        text = flag_pivot.fillna("")
+
+        discrete_colorscale = []
+        for i, flag in enumerate(FLAG_ORDER):
+            lo, hi = i / n_flags, (i + 1) / n_flags
+            discrete_colorscale += [[lo, FLAG_COLORS[flag]], [hi, FLAG_COLORS[flag]]]
+
+        fig = go.Figure(
+            go.Heatmap(
+                z=z.values,
+                x=[str(c) for c in flag_pivot.columns],
+                y=[str(i) for i in flag_pivot.index],
+                text=text.values,
+                hovertemplate="Product %{y}<br>Region %{x}<br>Status: %{text}<extra></extra>",
+                colorscale=discrete_colorscale,
+                zmin=0,
+                zmax=n_flags,
+                showscale=False,
+                xgap=2,
+                ygap=2,
+            )
         )
-        fig.update_layout(height=500)
-        st.plotly_chart(_style_plot(fig), width="stretch")
+        # A real legend, not a colour-bar: one invisible marker trace per
+        # category, labelled with its true row count across the whole
+        # filtered mart (not just this product x region view).
+        for flag in FLAG_ORDER:
+            count = int(flag_counts.get(flag, 0))
+            fig.add_trace(
+                go.Scatter(
+                    x=[None], y=[None], mode="markers",
+                    marker=dict(size=12, color=FLAG_COLORS[flag], symbol="square"),
+                    name=f"{flag} ({count})",
+                )
+            )
+        fig.update_layout(
+            height=min(140 + 34 * len(flag_pivot.index), 620),
+            xaxis_title="Region",
+            yaxis_title="Product",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        )
+        fig.update_xaxes(type="category", tickangle=-30)
+        fig.update_yaxes(type="category")
+        fig = _style_plot(fig)
+        fig.update_layout(margin=dict(t=90, l=90, r=30, b=90))
+        st.plotly_chart(fig, width="stretch")
 
     st.markdown("---")
     st.subheader("Actual vs Forecast by Month")
@@ -399,7 +468,9 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         name="Forecast", marker_color=COLOR_MUTED,
         marker_pattern_shape="/",
     ))
-    fig_monthly.update_layout(barmode="group", yaxis_title="Revenue", xaxis_title="")
+    fig_monthly.update_layout(
+        barmode="group", yaxis_title="Revenue", xaxis_title="Month", height=420,
+    )
     st.plotly_chart(_style_plot(fig_monthly), width="stretch")
 
     st.markdown("---")
@@ -436,8 +507,10 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
     with right:
         st.subheader("Variance Flag Distribution")
         st.caption(
-            "NO_ACTUALS and NO_FORECAST are grain gaps, not a variance "
-            "direction, so they stay neutral rather than red or teal."
+            "NO_ACTUALS is a grain gap, not a variance direction, so it "
+            "stays neutral grey rather than red or teal; NO_FORECAST is a "
+            "data-quality gap on the planning side, so it takes the violet "
+            "used for data quality elsewhere in this app."
         )
         flags = mart["variance_flag"].value_counts().reset_index()
         flags.columns = ["flag", "count"]
@@ -446,6 +519,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
             color="flag", color_discrete_map=FLAG_COLORS,
         )
         fig2.update_traces(textinfo="label+percent", textfont=dict(family=FONT_SANS))
+        fig2.update_layout(height=380)
         st.plotly_chart(_style_plot(fig2), width="stretch")
 
     st.markdown("---")
@@ -461,7 +535,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         color_continuous_scale=VARIANCE_COLORSCALE,
         color_continuous_midpoint=0,
     )
-    fig3.update_layout(yaxis_title="Variance ($)", xaxis_title="")
+    fig3.update_layout(yaxis_title="Variance ($)", xaxis_title="Product Family", height=420)
     st.plotly_chart(_style_plot(fig3), width="stretch")
 
     st.markdown("---")
@@ -530,11 +604,11 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
     # it stays neutral, and each slice carries its own label so hue is
     # never the only thing distinguishing one status from another.
     status_shades = {
-        "On Time": COLOR_TEXT,
-        "Late": COLOR_MUTED,
-        "Not Delivered": COLOR_BORDER,
-        "Cancelled": "#4A4540",
-        "Unknown": "#211E1A",
+        "On Time": COLOR_NEUTRAL_1,
+        "Late": COLOR_NEUTRAL_2,
+        "Not Delivered": COLOR_NEUTRAL_3,
+        "Cancelled": COLOR_NEUTRAL_4,
+        "Unknown": COLOR_NEUTRAL_5,
     }
 
     with left:
@@ -546,6 +620,7 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
             color="status", color_discrete_map=status_shades,
         )
         fig.update_traces(textinfo="label+percent", textfont=dict(family=FONT_SANS))
+        fig.update_layout(height=380)
         st.plotly_chart(_style_plot(fig), width="stretch")
 
     with right:
@@ -563,7 +638,10 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
                 text=by_region["on_time_rate"].apply(lambda x: f"{x:.0%}"),
             )
             fig2.update_traces(marker_color=COLOR_TEXT, textposition="outside")
-            fig2.update_layout(yaxis_title="On-Time Rate", yaxis_tickformat=".0%", xaxis_title="")
+            fig2.update_layout(
+                yaxis_title="On-Time Rate", yaxis_tickformat=".0%",
+                xaxis_title="Region", height=420,
+            )
             st.plotly_chart(_style_plot(fig2), width="stretch")
 
     st.markdown("---")
@@ -627,9 +705,11 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
         .sort_values("actual_revenue", ascending=False)
     )
     fig = px.treemap(by_family, path=["product_family"], values="actual_revenue")
-    fig.update_traces(marker_colors=[COLOR_SURFACE_RAISED] * len(by_family), textfont=dict(color=COLOR_TEXT))
-    fig.update_layout(height=350)
-    st.plotly_chart(_style_plot(fig), width="stretch")
+    fig.update_traces(marker_colors=[COLOR_NEUTRAL_4] * len(by_family), textfont=dict(color=COLOR_TEXT))
+    fig.update_layout(height=340)
+    fig = _style_plot(fig)
+    fig.update_layout(margin=dict(t=40, l=10, r=10, b=10))
+    st.plotly_chart(fig, width="stretch")
 
     st.markdown("---")
     left, right = st.columns(2)
@@ -669,8 +749,10 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
             ),
         )
         fig2.update_traces(marker_color=COLOR_TEXT, textposition="outside")
-        fig2.update_layout(xaxis_title="", xaxis_tickangle=-45)
-        st.plotly_chart(_style_plot(fig2), width="stretch")
+        fig2.update_layout(xaxis_title="Product", xaxis_tickangle=-45, height=460)
+        fig2 = _style_plot(fig2)
+        fig2.update_layout(margin=dict(t=40, l=60, r=30, b=140))
+        st.plotly_chart(fig2, width="stretch")
 
     with right:
         st.subheader("Product Lifecycle Status")
@@ -678,9 +760,10 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
         lifecycle.columns = ["status", "count"]
         fig3 = px.pie(lifecycle, names="status", values="count", hole=0.4)
         fig3.update_traces(
-            marker=dict(colors=[COLOR_TEXT, COLOR_MUTED, COLOR_BORDER, "#4A4540"]),
+            marker=dict(colors=[COLOR_NEUTRAL_1, COLOR_NEUTRAL_3, COLOR_NEUTRAL_4, COLOR_NEUTRAL_5]),
             textinfo="label+percent", textfont=dict(family=FONT_SANS),
         )
+        fig3.update_layout(height=380)
         st.plotly_chart(_style_plot(fig3), width="stretch")
 
         st.subheader("Products at a Glance")
@@ -777,7 +860,10 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
                 text=dq_valid["rejected_revenue"].apply(lambda x: f"${x:,.0f}"),
             )
             fig2.update_traces(marker_color=COLOR_VIOLET, textposition="outside")
-            fig2.update_layout(showlegend=False, yaxis_title="Rejected Revenue ($)", xaxis_title="")
+            fig2.update_layout(
+                showlegend=False, yaxis_title="Rejected Revenue ($)",
+                xaxis_title="DQ Failure Reason", xaxis_tickangle=-20, height=420,
+            )
             st.plotly_chart(_style_plot(fig2), width="stretch")
 
     st.markdown("---")

@@ -26,11 +26,14 @@ buried.
 
 ## The scene
 
-A data engineer at a desk on a large monitor, in a room lit by the screen,
-with a terminal and an editor open beside this in the same window manager.
-The dashboard sits among dark developer tooling and is read in long sessions
-alongside SQL. That forces a dark surface: a bright panel between two dark ones
-is the thing people close.
+An open-plan room with the lights on, or a conference room with a projector,
+or a laptop screen shared on a call: this dashboard gets read in a brightly
+lit, shared setting, sitting next to other light documents open in the same
+window, such as a spreadsheet, a spec, a ticket. It is also, sometimes, thrown up
+on a projector or shared screen for a room of people, where a dark panel is
+the one that loses its contrast and its colour under the room's own light.
+That forces a light surface: a bright panel is the one that survives being
+read by more than one person over someone's shoulder.
 
 ## Brand personality
 
@@ -78,5 +81,5 @@ Confidence comes from precision, never from emphasis.
   or shape in addition to colour.
 - Avoid red-green as the only discriminator; a diverging scale must remain
   readable to the most common colour-vision deficiencies.
-- Body text meets WCAG AA against the dark surface; numerals in tables are
+- Body text meets WCAG AA against the light surface; numerals in tables are
   tabular-figure aligned so columns compare by eye.
