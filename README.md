@@ -109,12 +109,15 @@ What has actually been proven, and where:
   revenue of $9,448,724.11 splits into $6,168,239.01 recognised,
   $3,006,773.46 open/cancelled, and $273,711.64 rejected, and `dbt build`
   fails if that stops balancing to the cent.
-- **The Snowflake path is code-complete but not yet evidenced.** See
-  [`docs/evidence/`](docs/evidence/) for what a live Snowflake run leaves
-  behind (`dbt`'s own run artifact, the build log, and Snowsight
-  screenshots) and how to produce it (`make snowflake-proof`). As of this
-  commit that directory is still empty: validation has been performed on
-  DuckDB only.
+- **The Snowflake path has been executed against a live trial account.**
+  `dbt build --target snowflake` completed with 94 results and 0 errors, the
+  loader wrote all four RAW tables, and every downstream number matches the
+  DuckDB build exactly: `mart_revenue_performance` at 289 rows, `fct_orders`
+  at 122, 6 rejects, 1 `UNMAPPED` region, and the same reconciliation to the
+  cent. `dbt`'s own run artifact and the full build log are committed at
+  [`docs/evidence/`](docs/evidence/); see that directory's README for what
+  each file proves and how to reproduce it (`make snowflake-proof`).
+  Snowsight screenshots have not yet been captured.
 
 ## Stack
 
