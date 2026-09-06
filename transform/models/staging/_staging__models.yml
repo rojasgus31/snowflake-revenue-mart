@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: stg_oracle__orders
+    description: >
+      Order lines that passed every data quality rule, typecast and with
+      plant location normalised. One row per order.
+    columns:
+      - name: order_id
+        description: Primary key. Guaranteed unique here because D1 duplicates are rejected.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests: [not_null]
+      - name: product_id
+        data_tests: [not_null]
+      - name: order_date
+        data_tests: [not_null]
+      - name: unit_price
+        data_tests: [not_null]
+      - name: gross_revenue
+        data_tests: [not_null]
+      - name: order_status
+        data_tests:
+          - accepted_values:
+              values: ["Shipped", "Open", "Cancelled"]
+      - name: source_batch
+        data_tests:
+          - accepted_values:
+              values: ["BATCH_A", "BATCH_B"]
+      - name: plant_country
+        description: Split out of the compound plant_location string (D11).
+        data_tests:
+          - accepted_values:
+              values: ["Costa Rica", "USA"]
+
+  - name: stg_oracle__orders_rejects
+    description: >
+      Rows excluded from analytics, retained with the reason they failed.
+      Never deleted -- Task 11 reconciles against this table.
+    columns:
+      - name: dq_failure_reason
+        data_tests:
+          - not_null
+          - accepted_values:
+              values:
+                - AMBIGUOUS_DUPLICATE
+                - MISSING_ORDER_DATE
+                - MISSING_UNIT_PRICE
+                - INVALID_QUANTITY
