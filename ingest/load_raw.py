@@ -30,19 +30,19 @@ def load_raw(
     """Load every source CSV into the raw schema. Returns row counts by table."""
     batch_id = uuid.uuid4().hex
     loaded_at = datetime.now(timezone.utc)
-    connection = duckdb.connect(db_path)
-    connection.execute("create schema if not exists raw")
 
     row_counts: dict[str, int] = {}
-    for file_name, table_name in SOURCE_TABLES.items():
-        csv_path = Path(data_dir) / file_name
-        if not csv_path.exists():
-            raise FileNotFoundError(f"Source file not found: {csv_path}")
-        row_counts[table_name] = _load_one(
-            connection, csv_path, table_name, batch_id, loaded_at
-        )
+    with duckdb.connect(db_path) as connection:
+        connection.execute("create schema if not exists raw")
 
-    connection.close()
+        for file_name, table_name in SOURCE_TABLES.items():
+            csv_path = Path(data_dir) / file_name
+            if not csv_path.exists():
+                raise FileNotFoundError(f"Source file not found: {csv_path}")
+            row_counts[table_name] = _load_one(
+                connection, csv_path, table_name, batch_id, loaded_at
+            )
+
     return row_counts
 
 
