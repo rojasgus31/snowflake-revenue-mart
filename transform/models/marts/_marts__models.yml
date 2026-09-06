@@ -69,3 +69,36 @@ models:
         data_tests: [unique, not_null]
       - name: forecast_revenue
         data_tests: [not_null]
+
+  - name: mart_revenue_performance
+    description: >
+      Actual against plan at product x region x month, the coarsest grain the
+      two inputs share. Built with a full outer join so unplanned revenue and
+      unfulfilled plan both stay visible. Per-order delivery detail lives in
+      fct_orders; see the spec for why one table cannot hold both grains.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [product_id, region, revenue_month]
+    columns:
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_product')
+              field: product_id
+      - name: region
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_region')
+              field: region_name
+      - name: revenue_month
+        data_tests: [not_null]
+      - name: actual_revenue
+        data_tests: [not_null]
+      - name: revenue_variance
+        data_tests: [not_null]
+      - name: variance_flag
+        data_tests:
+          - accepted_values:
+              values: ["NO_FORECAST", "NO_ACTUALS", "AT_OR_ABOVE_PLAN", "BELOW_PLAN"]
