@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Install dbt packages
+        run: uv run dbt deps --project-dir transform --profiles-dir transform
+
+      # dbt's plugin loader SWALLOWS adapter ImportErrors and simply omits the
+      # plugin from `dbt --version` output, so `dbt --version` looking healthy
+      # is not proof the Snowflake adapter is importable. Early in this project
+      # the adapter was silently broken while `dbt --version` still looked
+      # fine. Only an explicit import catches that class of failure.
+      - name: Verify the Snowflake adapter actually imports
+        run: uv run python -c "from dbt.adapters.snowflake import SnowflakeAdapter; print('snowflake adapter OK')"
+
+      - name: Land source data
+        run: uv run python ingest/load_raw.py
+
+      - name: Build and test the warehouse
+        run: uv run dbt build --project-dir transform --profiles-dir transform
+
+      - name: Run the Python test suite
+        run: uv run pytest -v
