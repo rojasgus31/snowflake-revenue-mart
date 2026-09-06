@@ -1,9 +1,45 @@
 # Power BI Connection Guide
 
 Power BI Desktop does not run on macOS, so this project ships a Streamlit
-dashboard instead. The mart is nonetheless shaped as a conformed star
-specifically so connecting Power BI is a configuration exercise rather than a
-rewrite. This document is what that configuration looks like.
+dashboard instead, and there is no `.pbix` file in this repository. That is
+not a gap being papered over: it is the honest boundary of what could be
+built here. This document is a connection specification, not a built report
+— everything below has been verified against the live Snowflake account
+except the actual point-and-click modeling inside Power BI Desktop itself.
+The mart is nonetheless shaped as a conformed star specifically so that
+modeling step is a configuration exercise rather than a rewrite.
+
+## Connection details
+
+| Setting | Value |
+|---|---|
+| Server | `ORGNAME-ACCOUNTNAME.snowflakecomputing.com` |
+| Warehouse | `WH_TRANSFORM_XS` |
+| Database | `REVENUE_ANALYTICS` |
+| Schema | `ANALYTICS` |
+| Role | `REPORTER` |
+
+Connect as **REPORTER**. That role has been verified against a live account
+to read all eight ANALYTICS objects (`dim_customer`, `dim_date`,
+`dim_product`, `dim_region`, `fct_orders`, `fct_forecast`,
+`mart_revenue_performance`, `dq_reject_summary`) and to be refused on
+STAGING and RAW. See docs/evidence/reporter_role_verification.md for the
+verification record.
+
+### The secondary-roles finding matters here
+
+Do not connect Power BI as a human user's own login, even one that also
+holds REPORTER, if that same user holds other roles. Snowflake keeps every
+granted role active as a secondary role by default, so a connection made as
+a human user who also happens to hold ACCOUNTADMIN — a common case for
+whoever set the account up — would silently grant the report far more access
+than REPORTER's own grants describe, regardless of which role is selected at
+connection time. The fix is not a setting inside Power BI; it is connecting
+with the service-account pattern in `snowflake/01_bootstrap.sql`
+(`default_secondary_roles = ()`), which has no other role available to widen
+the connection in the first place. See
+docs/evidence/reporter_role_verification.md for the demonstration this is
+based on.
 
 ## Model layout
 
