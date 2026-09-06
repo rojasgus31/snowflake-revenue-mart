@@ -229,7 +229,7 @@ def render_filter_row(data: dict[str, pd.DataFrame]):
     A plain horizontal row, not an expander or a modal: the filters apply to
     every tab exactly as before, they are just no longer hidden in a drawer.
     """
-    col_region, col_family, col_months, col_source = st.columns([2, 2, 3, 2])
+    col_region, col_family, col_months, col_source = st.columns([3, 3, 3, 1])
 
     with col_region:
         all_regions = sorted(data["mart"]["region"].unique())
@@ -721,7 +721,6 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
             )
         )
         fig.update_layout(
-            title="Delivery Status, All Orders",
             height=320,
             xaxis_title="Orders (count)",
             yaxis_title="Delivery Status",
@@ -754,7 +753,6 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
             )
             fig2.update_traces(marker_color=COLOR_TEAL, textposition="outside")
             fig2.update_layout(
-                title="On-Time Rate by Region",
                 yaxis_title="On-Time Rate (% of On Time + Late)",
                 yaxis_tickformat=".0%",
                 xaxis_title="Region", height=420,
@@ -812,7 +810,6 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
             )
             fig3.add_vline(x=0, line_color=COLOR_BORDER, line_width=1)
             fig3.update_layout(
-                title="Average Delivery Gap by Region",
                 height=280,
                 xaxis_title="Average Gap (days, zero-anchored)",
                 yaxis_title="Region",
@@ -961,7 +958,6 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
         )
     )
     fig.update_layout(
-        title="Revenue by Product Family",
         height=min(90 + 50 * len(by_family_sorted), 400),
         xaxis_title="Actual Revenue (USD)",
         yaxis_title="Product Family",
@@ -1029,7 +1025,6 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
             )
         )
         fig2.update_layout(
-            title="Gross Margin by Product",
             yaxis_title="Gross Margin (USD)",
             xaxis_title="Product", xaxis_tickangle=-45, height=480,
             showlegend=False,
@@ -1124,7 +1119,6 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
         )
     )
     fig.update_layout(
-        title="Revenue Reconciliation by Bucket",
         xaxis_title="Bucket",
         yaxis_title="Revenue (USD)",
         showlegend=False,
@@ -1181,7 +1175,6 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
             )
             fig2.update_traces(marker_color=COLOR_VIOLET, textposition="outside")
             fig2.update_layout(
-                title="Rejected Revenue by Reason",
                 showlegend=False,
                 xaxis_tickangle=-20, height=440,
                 margin=dict(t=60, l=70, r=30, b=110),
