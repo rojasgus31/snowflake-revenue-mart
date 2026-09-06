@@ -879,11 +879,15 @@ duckdb warehouse.duckdb -c "select dq_failure_reason, count(*) from staging.stg_
 Expected exactly:
 ```
 AMBIGUOUS_DUPLICATE   2
-INVALID_QUANTITY      1
+INVALID_QUANTITY      2
 MISSING_ORDER_DATE    1
 MISSING_UNIT_PRICE    1
 ```
-Five rejected rows, so `stg_oracle__orders` holds 123 of the 128 source rows.
+Six rejected rows, so `stg_oracle__orders` holds 122 of the 128 source rows.
+
+`INVALID_QUANTITY` is 2, not 1: `ORD90103` has quantity -15 and `ORD90104` has
+quantity 0. Both are non-positive and both are rejected under the one reason.
+If this shows 1, the rule is testing `quantity < 0` instead of `quantity <= 0`.
 
 - [ ] **Step 8: Commit**
 
@@ -2020,7 +2024,13 @@ where abs(source_amount - accounted_amount) > 0.01
 uv run dbt test --project-dir transform --profiles-dir transform --select assert_revenue_reconciles_to_source
 ```
 
-Expected: FAIL — `depends on a node named 'dq_reject_summary'` is not the error here; this test should actually compile and **pass** already, since Tasks 4–10 built the pipeline correctly. If it FAILS with a non-zero `unexplained_difference`, revenue is leaking — stop and find where before continuing.
+Expected: **PASS**. Unlike the other tests in this plan, this one is not
+test-first — it depends only on models Tasks 4, 9, and 10 already built, so a
+correct pipeline satisfies it immediately.
+
+If it FAILS, the reported `unexplained_difference` is revenue leaking somewhere
+between the source and the mart. Stop and find it before continuing — every
+number downstream is untrustworthy until this passes.
 
 - [ ] **Step 3: Write `dq_reject_summary.sql`**
 
