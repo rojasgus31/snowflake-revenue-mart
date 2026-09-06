@@ -30,8 +30,13 @@ models:
       - name: plant_country
         description: Split out of the compound plant_location string (D11).
         data_tests:
+          # An unrecognised plant country signals new business reality (a new
+          # manufacturing site), not corrupt data, so this should warn and
+          # surface in build output without halting the pipeline.
           - accepted_values:
               values: ["Costa Rica", "USA"]
+              config:
+                severity: warn
 
   - name: stg_oracle__orders_rejects
     description: >
