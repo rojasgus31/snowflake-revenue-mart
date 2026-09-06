@@ -31,3 +31,41 @@ models:
     columns:
       - name: product_id
         data_tests: [unique, not_null]
+
+  - name: fct_orders
+    description: >
+      Order-line grain, carrying the per-order delivery detail that cannot be
+      represented at the monthly mart grain.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - relationships:
+              to: ref('dim_customer')
+              field: customer_id
+      - name: product_id
+        data_tests:
+          - relationships:
+              to: ref('dim_product')
+              field: product_id
+      - name: region
+        data_tests:
+          - relationships:
+              to: ref('dim_region')
+              field: region_name
+      - name: delivery_status
+        data_tests:
+          - accepted_values:
+              values: ["On Time", "Late", "Not Delivered", "Cancelled", "Unknown"]
+
+  - name: fct_forecast
+    description: Plan grain, product x region x month.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [product_id, region, forecast_month]
+    columns:
+      - name: forecast_id
+        data_tests: [unique, not_null]
+      - name: forecast_revenue
+        data_tests: [not_null]
