@@ -47,3 +47,51 @@ models:
                 - MISSING_ORDER_DATE
                 - MISSING_UNIT_PRICE
                 - INVALID_QUANTITY
+
+  - name: stg_salesforce__accounts
+    description: Customer accounts. The only path from an order to a region.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: region
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["LATAM", "North America", "EMEA", "APAC"]
+      - name: segment
+        data_tests:
+          - accepted_values:
+              values: ["Enterprise", "Mid-Market", "SMB"]
+
+  - name: stg_adaptive__forecast
+    description: Revenue plan at product x region x month.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [product_id, region, forecast_month]
+    columns:
+      - name: forecast_id
+        data_tests: [unique, not_null]
+      - name: forecast_revenue
+        data_tests: [not_null]
+      - name: region
+        data_tests:
+          - accepted_values:
+              values: ["LATAM", "North America", "EMEA", "APAC"]
+      - name: product_id
+        data_tests:
+          - relationships:
+              to: ref('stg_erp__products')
+              field: product_id
+
+  - name: stg_erp__products
+    description: Product master. Sole source of standard cost.
+    columns:
+      - name: product_id
+        data_tests: [unique, not_null]
+      - name: standard_cost
+        description: Never null in this extract; margin depends on it.
+        data_tests: [not_null]
+      - name: lifecycle_status
+        data_tests:
+          - accepted_values:
+              values: ["Active", "Discontinued", "Pending"]
