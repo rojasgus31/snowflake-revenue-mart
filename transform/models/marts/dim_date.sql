@@ -1,6 +1,11 @@
--- Monthly date spine covering the full calendar year, not just the months with
--- data. A month where nothing shipped must still appear in the report as a
--- zero, otherwise a total collapse looks identical to a missing extract.
+-- A conformed monthly date dimension for the BI layer, spanning the full
+-- 2025 calendar year rather than just the months that happen to have data.
+-- mart_revenue_performance does not join this table -- its `revenue_month`
+-- values come straight from the fact grain, so a month with genuinely zero
+-- activity is simply absent from the mart rather than present as a zero row.
+-- dim_date exists so a BI tool (see docs/POWER_BI.md) can mark it as the
+-- model's date table and get correctly blank, rather than missing, periods
+-- on any visual that filters or groups by month.
 
 with months as (
 

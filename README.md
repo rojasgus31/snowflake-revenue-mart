@@ -16,10 +16,18 @@ make app
 ```
 
 About 35 seconds from a clean checkout to a built warehouse (measured via
-`make clean && make install && make all`, the exact sequence CI runs). No
-Snowflake account needed — DuckDB is the default target and the model code is
-identical on both engines. See `snowflake/README.md` to run it against a real
-Snowflake trial.
+`make clean && make install && make all`). No Snowflake account needed —
+DuckDB is the default target and the model code is identical on both engines.
+See `snowflake/README.md` to run it against a real Snowflake trial.
+
+CI (`.github/workflows/ci.yml`) does not invoke `make` at all — it runs the
+same underlying commands directly, one step per line: `uv sync --all-groups`,
+`uv run dbt deps`, an explicit `python -c "from dbt.adapters.snowflake import
+SnowflakeAdapter"` import check (dbt's plugin loader swallows adapter import
+errors, so `dbt --version` looking healthy is not proof the Snowflake adapter
+actually works), `uv run python ingest/load_raw.py`, `uv run dbt build`, and
+`uv run pytest -v`. It is the same work `make all` does locally, just spelled
+out rather than routed through the Makefile.
 
 ## The central design decision
 
@@ -68,8 +76,8 @@ That is the concrete evidence behind the "no dollar disappears" claim — not a
 tolerance band, an exact match. If a single dollar goes missing anywhere in the
 pipeline, `dbt build` fails.
 
-The full suite this build was verified against: **92 dbt results (16 models +
-76 tests) and 7 pytest tests, all passing.**
+The full suite this build was verified against: **94 dbt results (15 models +
+1 seed + 78 tests) and 7 pytest tests, all passing.**
 
 Two decisions worth calling out:
 
@@ -89,9 +97,18 @@ Two decisions worth calling out:
 | Warehouse | Snowflake (primary, dbt-snowflake 1.10.8), DuckDB 1.5.x (local mirror via dbt-duckdb 1.10.1, identical model code) |
 | Transformation | dbt-core 1.10.23, layered staging → intermediate → marts |
 | Distributed compute | PySpark 3.5.9 on Temurin JDK 17, with a test asserting parity against the SQL |
-| BI | Streamlit 1.63.0 (deployed), Power BI ([connection guide](docs/POWER_BI.md)) |
+| BI | Streamlit 1.63.0 (ready to deploy — see below), Power BI ([connection guide](docs/POWER_BI.md)) |
 | Runtime | Python 3.12 |
 | CI | GitHub Actions running the full build and test suite |
+
+### Deploying the dashboard
+
+The Streamlit app is not currently deployed anywhere — that requires a
+Streamlit Community Cloud account, which is the reader's, not this
+project's, to create. It is ready to deploy: point Streamlit Community Cloud
+at this repository with main file path `app/streamlit_app.py`. It reads the
+committed `warehouse.duckdb` directly and needs no credentials or secrets to
+be set.
 
 ## Layout
 
