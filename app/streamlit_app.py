@@ -42,8 +42,25 @@ from data_source import DataSourceError, backend_name, query
 
 st.set_page_config(page_title="Revenue Performance", page_icon="📊", layout="wide")
 
-CURRENCY_FORMAT = "${:,.0f}"
-CURRENCY_FORMAT_PRECISE = "${:,.2f}"
+def money(value: float) -> str:
+    """Format a currency amount with the sign OUTSIDE the symbol.
+
+    Python's "${:,.0f}" puts the minus between the symbol and the digits,
+    giving "$-8,385,132". Currency is not written that way: the sign belongs
+    in front of the whole amount. This matters here because most of the
+    variance in this mart is negative, so the wrong form would appear on
+    almost every figure in the app.
+    """
+    if value is None or pd.isna(value):
+        return "n/a"
+    return f"-${abs(value):,.0f}" if value < 0 else f"${value:,.0f}"
+
+
+def money_precise(value: float) -> str:
+    """money() to the cent, for the reconciliation figures that must tie."""
+    if value is None or pd.isna(value):
+        return "n/a"
+    return f"-${abs(value):,.2f}" if value < 0 else f"${value:,.2f}"
 PCT_FORMAT = "{:.1%}"
 NULL_MARKER = "unknown"
 
@@ -479,7 +496,7 @@ def render_balance_bar(totals: dict[str, float]):
     bar_html = ['<div class="balance-bar">']
     for css_key, label, value in segments:
         pct = (value / source_total * 100) if source_total else 0
-        tooltip = f"{label}: {CURRENCY_FORMAT_PRECISE.format(value)} ({pct:.1f}%)"
+        tooltip = f"{label}: {money_precise(value)} ({pct:.1f}%)"
         bar_html.append(
             f'<div class="balance-seg balance-seg--{css_key}" '
             f'style="width:{pct:.4f}%" title="{tooltip}"></div>'
@@ -489,7 +506,7 @@ def render_balance_bar(totals: dict[str, float]):
     st.markdown(
         f'<div class="balance-bar-label">Recognized + open + cancelled + '
         f'quarantined = source total '
-        f'<span class="num">{CURRENCY_FORMAT_PRECISE.format(source_total)}</span></div>',
+        f'<span class="num">{money_precise(source_total)}</span></div>',
         unsafe_allow_html=True,
     )
 
@@ -584,9 +601,9 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
         with panel("fig-actual-vs-plan"):
             figure_card(
                 "Actual vs Plan",
-                f'<span class="{state_class}">{glyph}</span> {CURRENCY_FORMAT.format(actual)}',
+                f'<span class="{state_class}">{glyph}</span> {money(actual)}',
                 (
-                    f'against {CURRENCY_FORMAT.format(forecast)} plan &middot; '
+                    f'against {money(forecast)} plan &middot; '
                     f'<span class="{state_class} num">'
                     f'{PCT_FORMAT.format(variance_pct) if variance_pct is not None else NULL_MARKER}'
                     f'</span> variance'
@@ -620,7 +637,7 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
         with panel("fig-reconciliation"):
             figure_card(
                 "Reconciliation",
-                CURRENCY_FORMAT.format(source_total),
+                money(source_total),
                 (
                     f'source revenue balances exactly &middot; '
                     f'<span class="state-violet">&#9670;</span> '
@@ -642,13 +659,13 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
         st.markdown(
             f'<div class="callout">Reconciliation balances to the cent: recognized, '
             f'open, cancelled and quarantined revenue sum to exactly '
-            f'<span class="num">{CURRENCY_FORMAT_PRECISE.format(source_total)}</span>.</div>',
+            f'<span class="num">{money_precise(source_total)}</span>.</div>',
             unsafe_allow_html=True,
         )
         if not unmapped.empty:
             st.markdown(
                 f'<div class="callout">One row, region UNMAPPED, carries '
-                f'<span class="num">{CURRENCY_FORMAT.format(unmapped_revenue)}</span> of '
+                f'<span class="num">{money(unmapped_revenue)}</span> of '
                 f'revenue that no forecast explains.</div>',
                 unsafe_allow_html=True,
             )
@@ -672,8 +689,8 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
                     y=by_region["region"],
                     orientation="h",
                     marker_color=bar_colors,
-                    text=[CURRENCY_FORMAT.format(v) for v in by_region["revenue_variance"]],
-                    textposition="outside",
+                    text=[money(v) for v in by_region["revenue_variance"]],
+                    textposition="auto",
                 )
             )
             fig.update_layout(
@@ -834,7 +851,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         fig_monthly.add_trace(go.Bar(
             x=monthly["revenue_month"], y=monthly["actual_revenue"],
             name="Actual", marker_color=COLOR_TEAL,
-            text=[CURRENCY_FORMAT.format(v) for v in monthly["actual_revenue"]],
+            text=[money(v) for v in monthly["actual_revenue"]],
             textposition="outside",
         ))
         fig_monthly.add_trace(go.Bar(
@@ -843,7 +860,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
             marker_line=dict(color=COLOR_MUTED, width=1.5),
             marker_pattern_shape="/",
             marker_pattern_fgcolor=COLOR_MUTED,
-            text=[CURRENCY_FORMAT.format(v) for v in monthly["forecast_revenue"]],
+            text=[money(v) for v in monthly["forecast_revenue"]],
             textposition="outside",
         ))
         fig_monthly.update_layout(
@@ -909,7 +926,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
                     orientation="h",
                     marker_color=[FLAG_COLORS[f] for f in flags["flag"]],
                     text=[f"{int(c):,}" for c in flags["count"]],
-                    textposition="outside",
+                    textposition="auto",
                 )
             )
             fig2.update_layout(
@@ -940,7 +957,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
             color="revenue_variance",
             color_continuous_scale=VARIANCE_COLORSCALE,
             color_continuous_midpoint=0,
-            text=by_family["revenue_variance"].apply(CURRENCY_FORMAT.format),
+            text=by_family["revenue_variance"].apply(money),
         )
         fig3.update_traces(textposition="outside")
         fig3.update_layout(
@@ -1049,7 +1066,7 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
                     orientation="h",
                     marker_color=[status_shades[s] for s in status_counts["status"]],
                     text=[f"{int(c):,}" for c in status_counts["count"]],
-                    textposition="outside",
+                    textposition="auto",
                 )
             )
             fig.update_layout(
@@ -1140,7 +1157,7 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
                         orientation="h",
                         marker_color=gap_colors,
                         text=[f"{v:+.1f}" for v in by_region_gap["delivery_gap_days"]],
-                        textposition="outside",
+                        textposition="auto",
                     )
                 )
                 fig3.add_vline(x=0, line_color=COLOR_CHART_GRIDLINE, line_width=1)
@@ -1242,7 +1259,7 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
     with panel("fig-margin-summary"):
         m1, m2, m3 = st.columns(3)
         m1.metric("Orders", f"{int(total_orders):,}")
-        m2.metric("Gross Margin", CURRENCY_FORMAT.format(total_margin))
+        m2.metric("Gross Margin", money(total_margin))
         m3.metric(
             "Margin Coverage",
             PCT_FORMAT.format(margin_coverage) if margin_coverage is not None else NULL_MARKER,
@@ -1298,8 +1315,8 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
                     colorscale=REVENUE_SEQUENTIAL_COLORSCALE,
                     showscale=False,
                 ),
-                text=[CURRENCY_FORMAT.format(v) for v in by_family_sorted["actual_revenue"]],
-                textposition="outside",
+                text=[money(v) for v in by_family_sorted["actual_revenue"]],
+                textposition="auto",
             )
         )
         fig.update_layout(
@@ -1361,10 +1378,10 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
                     marker_color=bar_colors,
                     text=by_product.apply(
                         lambda r: (
-                            f"{CURRENCY_FORMAT.format(r['actual_margin'])} "
+                            f"{money(r['actual_margin'])} "
                             f"({r['margin_coverage']:.0%} cov.)"
                             if pd.notna(r["margin_coverage"])
-                            else f"{CURRENCY_FORMAT.format(r['actual_margin'])} ({NULL_MARKER} cov.)"
+                            else f"{money(r['actual_margin'])} ({NULL_MARKER} cov.)"
                         ),
                         axis=1,
                     ),
@@ -1433,10 +1450,10 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
 
     with panel("fig-reconciliation-summary"):
         rc1, rc2, rc3, rc4 = st.columns(4)
-        rc1.metric("Recognized (Shipped)", CURRENCY_FORMAT.format(recognized))
-        rc2.metric("Open Pipeline", CURRENCY_FORMAT.format(open_rev))
-        rc3.metric("Cancelled", CURRENCY_FORMAT.format(cancelled_rev))
-        rc4.metric("Rejected (DQ)", CURRENCY_FORMAT.format(rejected_rev))
+        rc1.metric("Recognized (Shipped)", money(recognized))
+        rc2.metric("Open Pipeline", money(open_rev))
+        rc3.metric("Cancelled", money(cancelled_rev))
+        rc4.metric("Rejected (DQ)", money(rejected_rev))
         st.markdown(
             f'<p class="section-caption"><span class="state-violet">&#9670;</span> '
             f'<span class="state-violet num">'
@@ -1446,7 +1463,7 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
             unsafe_allow_html=True,
         )
 
-        st.metric("Source Total (sum of above)", CURRENCY_FORMAT_PRECISE.format(source_total))
+        st.metric("Source Total (sum of above)", money_precise(source_total))
 
     # One bar per bucket, coloured by what the bucket means rather than by
     # whether the waterfall step reads as an increase: recognised revenue is
@@ -1465,7 +1482,7 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
                 x=recon_labels,
                 y=recon_values,
                 marker_color=recon_colors,
-                text=[CURRENCY_FORMAT.format(v) for v in recon_values],
+                text=[money(v) for v in recon_values],
                 textposition="outside",
             )
         )
@@ -1478,7 +1495,7 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
         st.plotly_chart(_style_plot(fig), width="stretch")
         st.caption(
             f"The four buckets sum to the source total of "
-            f"{CURRENCY_FORMAT_PRECISE.format(source_total)} exactly; nothing "
+            f"{money_precise(source_total)} exactly; nothing "
             "is dropped or double-counted between raw orders and the mart."
         )
 
