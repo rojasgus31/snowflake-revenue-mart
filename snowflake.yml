@@ -13,6 +13,6 @@ entities:
     artifacts:
       - app/streamlit_app.py
       - app/data_source.py
-      - app/environment.yml
       - app/theme.css
+      - environment.yml
       - .streamlit/config.toml

@@ -268,8 +268,9 @@ def _style_plot(fig: go.Figure) -> go.Figure:
 
 
 def inject_theme():
-    css_path = Path(__file__).resolve().parent / "theme.css"
-    st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
+    css_path = Path(__file__).parent / "theme.css"
+    if css_path.exists():
+        st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
 
 
 def panel(key: str):
@@ -299,7 +300,7 @@ def section_rule(weight: str = "section"):
     st.markdown(f'<hr class="{css_class}" />', unsafe_allow_html=True)
 
 
-RUN_RESULTS_PATH = Path(__file__).resolve().parent.parent / "transform" / "target" / "run_results.json"
+RUN_RESULTS_PATH = Path(__file__).parent.parent / "transform" / "target" / "run_results.json"
 
 
 def _load_dbt_run_results() -> dict | None:
@@ -721,7 +722,7 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
             fig.add_vline(x=0, line_color=COLOR_CHART_GRIDLINE, line_width=1)
             fig = _style_plot(fig)
             fig.update_layout(margin=dict(t=40, l=90, r=40, b=60))
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
             st.caption(
                 "Every region sits below plan; bar length shows how far, in dollars, "
                 "not in percent, since percent alone would hide that most rows had "
@@ -840,7 +841,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
             fig.update_yaxes(type="category")
             fig = _style_plot(fig)
             fig.update_layout(margin=dict(t=90, l=90, r=30, b=90))
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
             st.caption(
                 f"{above_plan_cells} of {n_cells_with_data} product-region cells "
                 "contain at least one month at or above plan; "
@@ -886,7 +887,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
             barmode="group", yaxis_title="Revenue (USD)", xaxis_title="Month",
             height=460, legend_title_text="Series",
         )
-        st.plotly_chart(_style_plot(fig_monthly), width="stretch")
+        st.plotly_chart(_style_plot(fig_monthly), use_container_width=True)
         st.caption(
             "Forecast dwarfs actual in every month; the gap is the same "
             "structural shortfall the lede describes, not a swing month to month."
@@ -920,9 +921,8 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
                     },
                     na_rep=NULL_MARKER,
                 ),
-                width="stretch",
+                use_container_width=True,
                 hide_index=True,
-                row_height=32,
             )
 
     with right:
@@ -957,7 +957,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
             fig2.update_yaxes(autorange="reversed")
             fig2 = _style_plot(fig2)
             fig2.update_layout(margin=dict(t=40, l=150, r=50, b=60))
-            st.plotly_chart(fig2, width="stretch")
+            st.plotly_chart(fig2, use_container_width=True)
             st.caption(
                 "NO_ACTUALS dwarfs every other flag: most of the grid never had "
                 "an order to compare against plan."
@@ -984,7 +984,7 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
             height=460, coloraxis_colorbar_title="Variance (USD)",
             margin=dict(t=40, l=60, r=30, b=80),
         )
-        st.plotly_chart(_style_plot(fig3), width="stretch")
+        st.plotly_chart(_style_plot(fig3), use_container_width=True)
         st.caption(
             "Every product family sits below plan; colour and bar direction "
             "agree, so the reader never has to reconcile the two."
@@ -1000,7 +1000,6 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
             ]
             st.dataframe(
                 top.style.format({"revenue_variance": "${:,.0f}"}, na_rep=NULL_MARKER),
-                width="stretch", hide_index=True, row_height=32,
             )
     with right2:
         with panel("table-top5-below-plan"):
@@ -1010,7 +1009,6 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
             ]
             st.dataframe(
                 bottom.style.format({"revenue_variance": "${:,.0f}"}, na_rep=NULL_MARKER),
-                width="stretch", hide_index=True, row_height=32,
             )
 
     section_rule()
@@ -1038,9 +1036,8 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
                 },
                 na_rep=NULL_MARKER,
             ),
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
-            row_height=32,
             height=400,
         )
 
@@ -1096,7 +1093,7 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
             )
             fig = _style_plot(fig)
             fig.update_layout(margin=dict(t=60, l=120, r=50, b=60))
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
             st.caption(
                 "Late is the largest single status, ahead of On Time; only a "
                 "third of shipped orders arrived on schedule. Not Delivered is "
@@ -1127,7 +1124,7 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
                     yaxis_tickformat=".0%",
                     xaxis_title="Region", height=420,
                 )
-                st.plotly_chart(_style_plot(fig2), width="stretch")
+                st.plotly_chart(_style_plot(fig2), use_container_width=True)
                 st.caption(
                     "Every region falls short of an even on-time split; ranking "
                     "them shows which is furthest behind. Denominator is On Time "
@@ -1188,7 +1185,7 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
                 )
                 fig3 = _style_plot(fig3)
                 fig3.update_layout(margin=dict(t=60, l=90, r=40, b=60))
-                st.plotly_chart(fig3, width="stretch")
+                st.plotly_chart(fig3, use_container_width=True)
             st.caption(
                 "Red bars run late on average, teal bars run on time or early on "
                 "average; the axis is the same shortfall-versus-plan convention "
@@ -1255,9 +1252,8 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
 
             st.dataframe(
                 late_display.style.format({"Gross Revenue": "${:,.2f}"}, na_rep=NULL_MARKER),
-                width="stretch",
+                use_container_width=True,
                 hide_index=True,
-                row_height=32,
                 height=400,
             )
         else:
@@ -1346,7 +1342,7 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
         )
         fig = _style_plot(fig)
         fig.update_layout(margin=dict(t=60, l=140, r=60, b=60))
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
         st.caption(
             "Revenue concentrates in the top one or two families; the rest "
             "trail well behind. Fill deepens with revenue, on the same one-hue "
@@ -1420,7 +1416,7 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
         )
         fig2 = _style_plot(fig2)
         fig2.update_layout(margin=dict(t=60, l=70, r=30, b=150))
-        st.plotly_chart(fig2, width="stretch")
+        st.plotly_chart(fig2, use_container_width=True)
         st.caption(
             "Coverage below 100 percent means a slice of that bar's margin "
             "is unknown, not zero; hover a bar to see how much of it to trust."
@@ -1448,9 +1444,8 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
         ]].sort_values("product_id")
         st.dataframe(
             product_display.style.format({"standard_cost": "${:,.2f}"}, na_rep=NULL_MARKER),
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
-            row_height=32,
         )
 
 
@@ -1518,7 +1513,7 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
             showlegend=False,
             height=420,
         )
-        st.plotly_chart(_style_plot(fig), width="stretch")
+        st.plotly_chart(_style_plot(fig), use_container_width=True)
         st.caption(
             f"The four buckets sum to the source total of "
             f"{money_precise(source_total)} exactly; nothing "
@@ -1546,9 +1541,8 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
                     {"Rejected Revenue": "${:,.2f}", "% of Source Rows": "{:.2%}"},
                     na_rep=NULL_MARKER,
                 ),
-                width="stretch",
+                use_container_width=True,
                 hide_index=True,
-                row_height=32,
             )
 
     with right:
@@ -1576,7 +1570,7 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
                     xaxis_tickangle=-20, height=440,
                     margin=dict(t=60, l=70, r=30, b=110),
                 )
-                st.plotly_chart(_style_plot(fig2), width="stretch")
+                st.plotly_chart(_style_plot(fig2), use_container_width=True)
                 st.caption(
                     "One failure reason accounts for most of the quarantined "
                     "revenue; the rest are minor by comparison."
@@ -1604,9 +1598,8 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
                 {"Gross Revenue": "${:,.2f}", "Unit Price": "${:,.2f}"},
                 na_rep=NULL_MARKER,
             ),
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
-            row_height=32,
         )
 
     section_rule()
@@ -1695,9 +1688,9 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
                     st.markdown("Slowest models:")
                     st.dataframe(
                         slowest_df.style.format({"Execution Time (s)": "{:.2f}"}),
-                        width="stretch",
+                        use_container_width=True,
                         hide_index=True,
-                        row_height=32,
+
                     )
 
 

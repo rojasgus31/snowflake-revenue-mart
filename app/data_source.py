@@ -29,7 +29,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-DB_PATH = Path(__file__).resolve().parent.parent / "warehouse.duckdb"
+DB_PATH = Path(__file__).parent.parent / "warehouse.duckdb"
 
 DEFAULT_SNOWFLAKE_DATABASE = "REVENUE_ANALYTICS"
 DEFAULT_SNOWFLAKE_ROLE = "REPORTER"
