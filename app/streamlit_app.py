@@ -207,13 +207,25 @@ def _style_plot(fig: go.Figure) -> go.Figure:
     # the plot keeps its label inside, where it draws in COLOR_INSIDE_LABEL,
     # a warm ivory rather than white or COLOR_SURFACE, so it stays legible on
     # a saturated fill without reading as stark white-on-red.
-    fig.update_traces(
-        cliponaxis=False,
-        textposition="auto",
-        insidetextfont=dict(family=FONT_MONO, color=COLOR_INSIDE_LABEL),
-        outsidetextfont=dict(family=FONT_MONO, color=COLOR_TEXT),
-        selector=dict(type="bar"),
-    )
+    # Let labels place themselves ONLY where a chart has not already decided.
+    # Blanket-setting "auto" here used to overwrite an explicit "outside", which
+    # pushed labels inside tall bars; on a pale fill that put pale text on a
+    # pale background. A chart that states a position keeps it.
+    fig.update_traces(cliponaxis=False, selector=dict(type="bar"))
+    for trace in fig.data:
+        if trace.type != "bar":
+            continue
+        if trace.textposition is None:
+            trace.textposition = "auto"
+        # Inside text sits on the bar's own fill, so its colour follows that
+        # fill rather than the page: pale fills take dark text, saturated
+        # fills take the light one.
+        fill = trace.marker.color if isinstance(trace.marker.color, str) else None
+        pale = fill is None or fill in (COLOR_SURFACE, COLOR_SURFACE_RAISED)
+        trace.insidetextfont = dict(
+            family=FONT_MONO, color=COLOR_TEXT if pale else COLOR_INSIDE_LABEL
+        )
+        trace.outsidetextfont = dict(family=FONT_MONO, color=COLOR_TEXT)
     fig.update_xaxes(automargin=True)
     fig.update_yaxes(automargin=True)
     return fig
