@@ -56,6 +56,25 @@ def money(value: float) -> str:
     return f"-${abs(value):,.0f}" if value < 0 else f"${value:,.0f}"
 
 
+def money_compact(value: float) -> str:
+    """A short currency form that fits inside a narrow bar.
+
+    "$646,401 (100% cov.)" is too wide for a vertical bar, so the label gets
+    pushed outside and has to be dark to stay legible on the panel. "$646k"
+    fits, which lets the value sit on the bar in the light label colour. The
+    exact figure and its coverage stay available on hover.
+    """
+    if value is None or pd.isna(value):
+        return "n/a"
+    sign = "-" if value < 0 else ""
+    v = abs(value)
+    if v >= 1_000_000:
+        return f"{sign}${v / 1_000_000:,.1f}M"
+    if v >= 1_000:
+        return f"{sign}${v / 1_000:,.0f}k"
+    return f"{sign}${v:,.0f}"
+
+
 def money_precise(value: float) -> str:
     """money() to the cent, for the reconciliation figures that must tie."""
     if value is None or pd.isna(value):
@@ -1335,97 +1354,104 @@ def tab_product_margin(data: dict[str, pd.DataFrame]):
         )
 
     section_rule()
-    left, right = st.columns(2)
 
-    with left:
-        with panel("chart-margin-by-product"):
-            st.subheader("Margin by Product")
-            st.caption(
-                "Teal marks a product whose margin is built from a fully known "
-                "cost; violet marks one where at least one order had no "
-                "standard cost, so part of that bar's margin is unknown rather "
-                "than zero. The label states the coverage directly."
+    # Full width, stacked. Side by side, the chart had to rotate twelve product
+    # names to 45 degrees to fit and the table lost its last column off the
+    # right edge. Neither reads at half width, and nothing here needs to be
+    # compared across the two.
+    with panel("chart-margin-by-product"):
+        st.subheader("Margin by Product")
+        st.caption(
+            "Teal marks a product whose margin is built from a fully known "
+            "cost; violet marks one where at least one order had no "
+            "standard cost, so part of that bar's margin is unknown rather "
+            "than zero. The bar states the margin; hover it for the exact figure "
+            "and how much of it rests on a known cost."
+        )
+        by_product = (
+            mart.groupby("product_id", as_index=False)
+            .agg(
+                actual_revenue=("actual_revenue", "sum"),
+                actual_margin=("actual_margin", "sum"),
             )
-            by_product = (
-                mart.groupby("product_id", as_index=False)
-                .agg(
-                    actual_revenue=("actual_revenue", "sum"),
-                    actual_margin=("actual_margin", "sum"),
-                )
-            )
-            cost_coverage = orders.groupby("product_id").agg(
-                orders_with_known_cost=("has_standard_cost", "sum"),
-                order_count=("has_standard_cost", "count"),
-            )
-            by_product = by_product.merge(cost_coverage, on="product_id", how="left")
-            by_product["margin_coverage"] = (
-                by_product["orders_with_known_cost"] / by_product["order_count"].replace(0, float("nan"))
-            )
+        )
+        cost_coverage = orders.groupby("product_id").agg(
+            orders_with_known_cost=("has_standard_cost", "sum"),
+            order_count=("has_standard_cost", "count"),
+        )
+        by_product = by_product.merge(cost_coverage, on="product_id", how="left")
+        by_product["margin_coverage"] = (
+            by_product["orders_with_known_cost"] / by_product["order_count"].replace(0, float("nan"))
+        )
 
-            product_names = products.set_index("product_id")["product_name"]
-            by_product["product_name"] = by_product["product_id"].map(product_names).fillna(by_product["product_id"])
-            by_product = by_product.sort_values("actual_margin", ascending=False)
+        product_names = products.set_index("product_id")["product_name"]
+        by_product["product_name"] = by_product["product_id"].map(product_names).fillna(by_product["product_id"])
+        by_product = by_product.sort_values("actual_margin", ascending=False)
 
-            bar_colors = [
-                COLOR_TEAL if pd.notna(c) and c >= 1 else COLOR_VIOLET
-                for c in by_product["margin_coverage"]
-            ]
+        bar_colors = [
+            COLOR_TEAL if pd.notna(c) and c >= 1 else COLOR_VIOLET
+            for c in by_product["margin_coverage"]
+        ]
 
-            fig2 = go.Figure(
-                go.Bar(
-                    x=by_product["product_name"],
-                    y=by_product["actual_margin"],
-                    marker_color=bar_colors,
-                    text=by_product.apply(
-                        lambda r: (
-                            f"{money(r['actual_margin'])} "
-                            f"({r['margin_coverage']:.0%} cov.)"
-                            if pd.notna(r["margin_coverage"])
-                            else f"{money(r['actual_margin'])} ({NULL_MARKER} cov.)"
-                        ),
-                        axis=1,
+        fig2 = go.Figure(
+            go.Bar(
+                x=by_product["product_name"],
+                y=by_product["actual_margin"],
+                marker_color=bar_colors,
+                text=by_product["actual_margin"].apply(money_compact),
+                customdata=by_product.apply(
+                    lambda r: (
+                        f"{money(r['actual_margin'])} "
+                        f"({r['margin_coverage']:.0%} of orders have a known cost)"
+                        if pd.notna(r["margin_coverage"])
+                        else f"{money(r['actual_margin'])} (coverage {NULL_MARKER})"
                     ),
-                    textposition="outside",
-                )
+                    axis=1,
+                ),
+                hovertemplate="%{x}<br>%{customdata}<extra></extra>",
+                textposition="inside",
+                insidetextanchor="middle",
             )
-            fig2.update_layout(
-                yaxis_title="Gross Margin (USD)",
-                xaxis_title="Product", xaxis_tickangle=-45, height=480,
-                showlegend=False,
-            )
-            fig2 = _style_plot(fig2)
-            fig2.update_layout(margin=dict(t=60, l=70, r=30, b=150))
-            st.plotly_chart(fig2, width="stretch")
-            st.caption(
-                "Coverage below 100 percent means a slice of that bar's margin "
-                "is unknown, not zero; the label says how much of it to trust."
-            )
+        )
+        fig2.update_layout(
+            yaxis_title="Gross Margin (USD)",
+            xaxis_title="Product", xaxis_tickangle=-45, height=480,
+            showlegend=False,
+        )
+        fig2 = _style_plot(fig2)
+        fig2.update_layout(margin=dict(t=60, l=70, r=30, b=150))
+        st.plotly_chart(fig2, width="stretch")
+        st.caption(
+            "Coverage below 100 percent means a slice of that bar's margin "
+            "is unknown, not zero; hover a bar to see how much of it to trust."
+        )
 
-    with right:
-        with panel("table-product-lifecycle"):
-            st.subheader("Product Lifecycle Status")
-            # Twelve products across three statuses is too small a set for a
-            # chart to earn its place; a sentence states the same three counts
-            # without asking the reader to decode a legend for so little data.
-            lifecycle = products[~products["is_synthetic"]]["lifecycle_status"].value_counts()
-            lifecycle_parts = [f"{int(n)} {status}" for status, n in lifecycle.items()]
-            st.markdown(
-                f'<p>Of {int(lifecycle.sum())} products: '
-                f'{", ".join(lifecycle_parts)}.</p>',
-                unsafe_allow_html=True,
-            )
+    section_rule()
 
-            st.subheader("Products at a Glance")
-            product_display = products[~products["is_synthetic"]][[
-                "product_id", "product_name", "product_family",
-                "lifecycle_status", "standard_cost",
-            ]].sort_values("product_id")
-            st.dataframe(
-                product_display.style.format({"standard_cost": "${:,.2f}"}, na_rep=NULL_MARKER),
-                width="stretch",
-                hide_index=True,
-                row_height=32,
-            )
+    with panel("table-product-lifecycle"):
+        st.subheader("Product Lifecycle Status")
+        # Twelve products across three statuses is too small a set for a
+        # chart to earn its place; a sentence states the same three counts
+        # without asking the reader to decode a legend for so little data.
+        lifecycle = products[~products["is_synthetic"]]["lifecycle_status"].value_counts()
+        lifecycle_parts = [f"{int(n)} {status}" for status, n in lifecycle.items()]
+        st.markdown(
+            f'<p>Of {int(lifecycle.sum())} products: '
+            f'{", ".join(lifecycle_parts)}.</p>',
+            unsafe_allow_html=True,
+        )
+
+        st.subheader("Products at a Glance")
+        product_display = products[~products["is_synthetic"]][[
+            "product_id", "product_name", "product_family",
+            "lifecycle_status", "standard_cost",
+        ]].sort_values("product_id")
+        st.dataframe(
+            product_display.style.format({"standard_cost": "${:,.2f}"}, na_rep=NULL_MARKER),
+            width="stretch",
+            hide_index=True,
+            row_height=32,
+        )
 
 
 def tab_data_quality(data: dict[str, pd.DataFrame]):
