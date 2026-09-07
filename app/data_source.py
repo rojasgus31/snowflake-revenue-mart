@@ -176,7 +176,9 @@ def _cached_connector_query(sql: str, settings_key: tuple) -> pd.DataFrame:
     cursor = connection.cursor()
     try:
         cursor.execute(sql)
-        return cursor.fetch_pandas_all()
+        df = cursor.fetch_pandas_all()
+        df.columns = [c.lower() for c in df.columns]
+        return df
     finally:
         cursor.close()
 
@@ -184,7 +186,9 @@ def _cached_connector_query(sql: str, settings_key: tuple) -> pd.DataFrame:
 @st.cache_data(ttl=SNOWFLAKE_CACHE_TTL_SECONDS, show_spinner=False)
 def _cached_snowpark_query(sql: str) -> pd.DataFrame:
     session = _resolve_backend()["session"]
-    return session.sql(sql).to_pandas()
+    df = session.sql(sql).to_pandas()
+    df.columns = [c.lower() for c in df.columns]
+    return df
 
 
 def backend_name() -> str:
@@ -208,8 +212,10 @@ def query(sql: str) -> pd.DataFrame:
     """
     backend = _resolve_backend()
     qualifier = _database_qualifier()
-    qualified_sql = sql.replace("analytics.", f"{qualifier}analytics.").replace(
-        "raw.", f"{qualifier}raw."
+    qualified_sql = (
+        sql.replace("analytics.", f"{qualifier}analytics.")
+        .replace("staging.", f"{qualifier}staging.")
+        .replace("raw.", f"{qualifier}raw.")
     )
 
     try:
