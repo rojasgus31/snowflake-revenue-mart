@@ -300,22 +300,37 @@ def section_rule(weight: str = "section"):
     st.markdown(f'<hr class="{css_class}" />', unsafe_allow_html=True)
 
 
-RUN_RESULTS_PATH = Path(__file__).parent.parent / "transform" / "target" / "run_results.json"
+_REPO_ROOT = Path(__file__).parent.parent
+
+# Where a build artifact can come from, best first.
+#
+# transform/target/ is a build directory and is not committed, so a deployed
+# copy of this app never has one: the panel would always be empty in the one
+# place a reader is most likely to look. The recorded run under docs/evidence
+# is committed precisely so the artifact outlives the machine that produced
+# it, so it stands in. Which one is being shown is stated in the panel, since
+# a recorded run and a run from moments ago are not the same claim.
+RUN_RESULTS_SOURCES = (
+    (_REPO_ROOT / "transform" / "target" / "run_results.json", "this working copy"),
+    (_REPO_ROOT / "docs" / "evidence" / "snowflake_run_results.json", "a recorded run against Snowflake"),
+)
 
 
-def _load_dbt_run_results() -> dict | None:
-    """The dbt build's own run_results.json, if one exists.
+def _load_dbt_run_results() -> tuple[dict, str] | None:
+    """The most recent dbt run_results available, and where it came from.
 
-    A fresh clone has never run `make build`, so the file may simply be
-    absent -- that is not an error, it is the expected state before a first
-    build, and the caller shows a short message instead of a traceback.
+    Returns None only when neither a local build nor the committed record is
+    present, which is a fresh clone that has never run a build. That is an
+    expected state, not an error.
     """
-    if not RUN_RESULTS_PATH.exists():
-        return None
-    try:
-        return json.loads(RUN_RESULTS_PATH.read_text())
-    except (OSError, json.JSONDecodeError):
-        return None
+    for path, origin in RUN_RESULTS_SOURCES:
+        if not path.exists():
+            continue
+        try:
+            return json.loads(path.read_text()), origin
+        except (OSError, json.JSONDecodeError):
+            continue
+    return None
 
 
 def load_data() -> dict[str, pd.DataFrame]:
@@ -547,8 +562,9 @@ def render_instrument_header(data: dict[str, pd.DataFrame]):
     else:
         freshness_html = NULL_MARKER
 
-    run_results = _load_dbt_run_results()
-    if run_results is not None:
+    loaded_run = _load_dbt_run_results()
+    if loaded_run is not None:
+        run_results, _run_origin = loaded_run
         test_results = [
             r for r in run_results.get("results", []) if r["unique_id"].startswith("test.")
         ]
@@ -1649,20 +1665,27 @@ def tab_data_quality(data: dict[str, pd.DataFrame]):
     with obs_right:
         with panel("fig-last-dbt-build"):
             st.markdown("**Last dbt Build**")
-            run_results = _load_dbt_run_results()
-            if run_results is None:
+            loaded_run = _load_dbt_run_results()
+            if loaded_run is None:
                 st.info(
-                    "No transform/target/run_results.json found. Run "
-                    "`make build` to produce one."
+                    "No dbt run artifact available. Run `make build` to produce "
+                    "one, or check that the recorded run under docs/evidence is "
+                    "present."
                 )
             else:
+                run_results, run_origin = loaded_run
+                st.caption(f"Read from {run_origin}.")
                 results = run_results.get("results", [])
                 model_results = [r for r in results if r["unique_id"].startswith("model.")]
                 test_results = [r for r in results if r["unique_id"].startswith("test.")]
                 models_ok = sum(1 for r in model_results if r["status"] == "success")
                 tests_passed = sum(1 for r in test_results if r["status"] == "pass")
                 tests_failed = len(test_results) - tests_passed
-                generated_at = run_results.get("metadata", {}).get("generated_at", NULL_MARKER)
+                raw_generated = run_results.get("metadata", {}).get("generated_at")
+                try:
+                    generated_at = pd.Timestamp(raw_generated).strftime("%Y-%m-%d %H:%M UTC")
+                except (ValueError, TypeError):
+                    generated_at = raw_generated or NULL_MARKER
                 elapsed = run_results.get("elapsed_time")
 
                 st.metric("Pipeline Last Ran", str(generated_at))
