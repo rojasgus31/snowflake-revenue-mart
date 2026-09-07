@@ -14,5 +14,11 @@ entities:
       - app/streamlit_app.py
       - app/data_source.py
       - app/theme.css
-      - environment.yml
       - .streamlit/config.toml
+      # Deliberately not at the repository root. Streamlit Community Cloud
+      # prefers an environment.yml over requirements.txt, and would build the
+      # app with conda against Snowflake's package channel, which carries no
+      # plotly, so the app failed at import. Mapped into the stage root here,
+      # which is where the warehouse looks for it.
+      - src: snowflake/environment.yml
+        dest: environment.yml
