@@ -1,0 +1,16 @@
+definition_version: "2"
+entities:
+  revenue_dashboard:
+    type: streamlit
+    identifier:
+      name: REVENUE_PERFORMANCE_DASHBOARD
+      schema: ANALYTICS
+      database: REVENUE_ANALYTICS
+    title: "Revenue Performance Dashboard"
+    query_warehouse: WH_TRANSFORM_XS
+    main_file: app/streamlit_app.py
+    stage: ANALYTICS.STREAMLIT_STAGE
+    artifacts:
+      - app/streamlit_app.py
+      - app/data_source.py
+      - app/environment.yml

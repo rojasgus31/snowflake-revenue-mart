@@ -14,3 +14,4 @@ transform/logs/
 # empty duplicate warehouse file here. The real, committed warehouse lives at
 # the repo root.
 transform/warehouse.duckdb
+output/
