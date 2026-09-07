@@ -78,6 +78,26 @@ COLOR_AMBER = "#B45309"
 # bar never reads as near-black.
 COLOR_GREY_MID = "#8A8580"    # structurally excluded, no judgement
 
+# Chart chrome, against the RAISED PANEL surface every chart now sits on
+# directly (Defect 2: charts are transparent, not painted their own
+# COLOR_SURFACE rectangle -- see _style_plot). COLOR_BORDER (#DAD7D3) is a
+# 1.26:1 contrast against the panel and effectively disappears, so
+# gridlines, zero-reference lines and axis lines reuse COLOR_GREY_MID
+# instead, which measures 3.20:1 against #F3EFED -- clearly visible without
+# competing with data. Tick and axis-title text stays COLOR_MUTED, which
+# already clears 4.83:1 against the panel, so it needed no change.
+COLOR_CHART_GRIDLINE = COLOR_GREY_MID
+
+# Defect 3: the in-bar value-label colour for the rare case a label stays
+# inside a bar (Plotly's own "auto" placement already prefers dark text
+# outside the bar whenever the bar and margins have room for it -- see
+# _style_plot). Never pure white or COLOR_SURFACE: a warm ivory that clears
+# 4.5:1 against every saturated fill it can land on: 5.78:1 on COLOR_RED,
+# 5.30:1 on COLOR_TEAL, 6.01:1 on COLOR_VIOLET, 4.76:1 on COLOR_AMBER,
+# 5.23:1 on COLOR_MUTED (ratios computed with the WCAG relative-luminance
+# formula against each fill's own hex).
+COLOR_INSIDE_LABEL = "#FFF8ED"
+
 FONT_SANS = "'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif"
 FONT_MONO = "'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace"
 
@@ -150,22 +170,30 @@ def _style_plot(fig: go.Figure) -> go.Figure:
     template, gridlines or font: DRY per the "chrome gets no hue" rule.
     Generous margins here are the baseline every chart gets; a few charts
     with long tick labels widen one side further below.
+
+    Backgrounds are fully transparent (Defect 2), not painted COLOR_SURFACE:
+    a chart sits directly on its panel's raised surface with no rectangle of
+    its own, so gridlines/axis lines use COLOR_CHART_GRIDLINE, the shade
+    that stays visible against that raised surface (see its definition
+    above for the measured contrast ratios).
     """
     fig.update_layout(
         template="plotly_white",
-        paper_bgcolor=COLOR_SURFACE,
-        plot_bgcolor=COLOR_SURFACE,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family=FONT_SANS, color=COLOR_TEXT, size=13),
         legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color=COLOR_TEXT)),
         margin=dict(t=40, l=60, r=30, b=60),
     )
     fig.update_xaxes(
-        gridcolor=COLOR_BORDER, zerolinecolor=COLOR_BORDER, linecolor=COLOR_BORDER,
+        gridcolor=COLOR_CHART_GRIDLINE, zerolinecolor=COLOR_CHART_GRIDLINE,
+        linecolor=COLOR_CHART_GRIDLINE,
         color=COLOR_MUTED, tickfont=dict(family=FONT_MONO, color=COLOR_MUTED),
         title_font=dict(family=FONT_SANS, color=COLOR_MUTED, size=13),
     )
     fig.update_yaxes(
-        gridcolor=COLOR_BORDER, zerolinecolor=COLOR_BORDER, linecolor=COLOR_BORDER,
+        gridcolor=COLOR_CHART_GRIDLINE, zerolinecolor=COLOR_CHART_GRIDLINE,
+        linecolor=COLOR_CHART_GRIDLINE,
         color=COLOR_MUTED, tickfont=dict(family=FONT_MONO, color=COLOR_MUTED),
         title_font=dict(family=FONT_SANS, color=COLOR_MUTED, size=13),
     )
@@ -174,13 +202,15 @@ def _style_plot(fig: go.Figure) -> go.Figure:
     # figure reads as "05,857" when it is -8,205,857. Let them draw beyond the
     # axis and pad the plot so there is somewhere for them to go.
     # "auto" puts the value inside the bar when it fits and outside when it
-    # does not. Forcing it outside pushed long negative bars' labels on top of
-    # the category names; forcing it inside would hide the short ones. Inside
-    # text is drawn in the surface colour so it stays legible on a filled bar.
+    # does not, which means dark text outside is already the default for
+    # every bar with room for it (Defect 3). Only a bar long enough to fill
+    # the plot keeps its label inside, where it draws in COLOR_INSIDE_LABEL,
+    # a warm ivory rather than white or COLOR_SURFACE, so it stays legible on
+    # a saturated fill without reading as stark white-on-red.
     fig.update_traces(
         cliponaxis=False,
         textposition="auto",
-        insidetextfont=dict(family=FONT_MONO, color=COLOR_SURFACE),
+        insidetextfont=dict(family=FONT_MONO, color=COLOR_INSIDE_LABEL),
         outsidetextfont=dict(family=FONT_MONO, color=COLOR_TEXT),
         selector=dict(type="bar"),
     )
@@ -640,7 +670,7 @@ def tab_executive_summary(filtered: dict[str, pd.DataFrame], raw: dict[str, pd.D
                 yaxis_title="Region",
                 showlegend=False,
             )
-            fig.add_vline(x=0, line_color=COLOR_BORDER, line_width=1)
+            fig.add_vline(x=0, line_color=COLOR_CHART_GRIDLINE, line_width=1)
             fig = _style_plot(fig)
             fig.update_layout(margin=dict(t=40, l=90, r=40, b=60))
             st.plotly_chart(fig, width="stretch")
@@ -676,6 +706,19 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
         .sort_index()
     )
     flag_pivot = flag_pivot[sorted(flag_pivot.columns)]
+
+    # Defect 1: the legend must count what the grid actually draws -- one
+    # collapsed flag per product x region CELL -- not the underlying
+    # product-region-MONTH rows `flag_counts` holds. `.stack()` drops the
+    # product x region pairs with no mart row at all (a cell that is blank,
+    # not coloured), so this is exactly the population of cells the heatmap
+    # renders. Two numbers, two grains, computed fresh every render so they
+    # can never drift out of sync with each other or with the data.
+    cell_flags = flag_pivot.stack()
+    cell_flag_counts = cell_flags.value_counts()
+    n_cells_with_data = int(len(cell_flags))
+    above_plan_cells = int(cell_flag_counts.get("AT_OR_ABOVE_PLAN", 0))
+    above_plan_rows = int(flag_counts.get("AT_OR_ABOVE_PLAN", 0))
 
     with panel("chart-variance-status-heatmap"):
         if not flag_pivot.empty:
@@ -726,15 +769,17 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
                 )
             )
             # A real legend, not a colour-bar: one invisible marker trace per
-            # category, labelled with its true row count across the whole
-            # filtered mart (not just this product x region view).
+            # category, labelled with the CELL count -- how many
+            # product-region boxes the grid actually draws in that colour --
+            # not the row count. Naming the unit explicitly ("cells") keeps
+            # the grain unambiguous next to the month-level caption below.
             for flag in FLAG_ORDER:
-                count = int(flag_counts.get(flag, 0))
+                count = int(cell_flag_counts.get(flag, 0))
                 fig.add_trace(
                     go.Scatter(
                         x=[None], y=[None], mode="markers",
                         marker=dict(size=12, color=FLAG_COLORS[flag], symbol="square"),
-                        name=f"{flag} ({count})",
+                        name=f"{flag} ({count} cells)",
                     )
                 )
             fig.update_layout(
@@ -748,6 +793,14 @@ def tab_revenue_variance(data: dict[str, pd.DataFrame]):
             fig = _style_plot(fig)
             fig.update_layout(margin=dict(t=90, l=90, r=30, b=90))
             st.plotly_chart(fig, width="stretch")
+            st.caption(
+                f"{above_plan_cells} of {n_cells_with_data} product-region cells "
+                "contain at least one month at or above plan; "
+                f"{above_plan_rows} of the {total_rows} product-region-months "
+                "were at or above plan. A cell can hold up to six months, so "
+                "more months than cells clear plan whenever a cell's good month "
+                "shares a cell with others that did not."
+            )
 
     section_rule()
     with panel("chart-actual-vs-forecast-by-month"):
@@ -1078,7 +1131,7 @@ def tab_delivery(data: dict[str, pd.DataFrame]):
                         textposition="outside",
                     )
                 )
-                fig3.add_vline(x=0, line_color=COLOR_BORDER, line_width=1)
+                fig3.add_vline(x=0, line_color=COLOR_CHART_GRIDLINE, line_width=1)
                 fig3.update_layout(
                     height=280,
                     xaxis_title="Average Gap (days, zero-anchored)",
